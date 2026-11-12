@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <title>APEX RUSH NEXT — Next-Gen Street Racing &amp; Drift</title>
+</head>
+<body>
+  <canvas id="game" aria-label="3D racing viewport"></canvas>
+  <canvas id="speedLines" class="hidden" aria-hidden="true"></canvas>
+
+  <!-- In-Race HUD -->
+  <div id="hud" class="hidden">
+    <div class="hud-panel tl">
+      <div id="pos"><span id="posNum">1</span><sup id="posSuf">st</sup><span id="posTot">/6</span></div>
+      <div id="lap">LAP <b id="lapNum">1</b>/<span id="lapTot">3</span></div>
+      <div id="board"></div>
+    </div>
+
+    <div class="hud-panel tr">
+      <div class="row big"><span>TIME</span><b id="tTotal">0:00.000</b></div>
+      <div class="row"><span>LAP</span><b id="tLap">0:00.000</b></div>
+      <div class="row"><span>LAST</span><b id="tLast">--:--.---</b></div>
+      <div class="row best"><span>BEST</span><b id="tBest">--:--.---</b></div>
+    </div>
+
+    <div id="driftBadge" aria-live="polite">
+      <span class="drift-label">DRIFT</span>
+      <strong id="driftPts">+0</strong>
+      <small>+NOS CHARGING</small>
+    </div>
+
+    <canvas id="minimap" width="180" height="180" aria-label="Track minimap"></canvas>
+
+    <div class="hud-bottom-right">
+      <div id="nosWrap">
+        <div class="nos-header">
+          <span id="nosTag">NOS READY [SHIFT]</span>
+          <b id="nosPct">100%</b>
+        </div>
+        <div class="nos-track">
+          <div id="nosFill"></div>
+        </div>
+      </div>
+      <canvas id="speedo" width="200" height="200" aria-label="Speedometer"></canvas>
+    </div>
+
+    <div id="countdown" aria-live="assertive"></div>
+    <div id="wrongway" class="hidden">WRONG WAY</div>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <div id="help">
+      W / ↑ Gas · S Reverse · A / D Steer · <b>SPACE / ↓ Drift</b> · <b>SHIFT NOS</b> · C Cam · R Reset · P Pause
+    </div>
+  </div>
+
+  <!-- Touch Controls -->
+  <div id="touch" class="hidden">
+    <button type="button" class="tbtn" id="tLeft" aria-label="Steer Left">◀</button>
+    <button type="button" class="tbtn" id="tRight" aria-label="Steer Right">▶</button>
+    <button type="button" class="tbtn" id="tBrake" aria-label="Brake or Reverse">■</button>
+    <button type="button" class="tbtn" id="tGas" aria-label="Accelerate">▲</button>
+    <button type="button" class="tbtn" id="tDrift">DRIFT</button>
+    <button type="button" class="tbtn" id="tNos">NOS</button>
+  </div>
+
+  <div id="hudTopActions" class="hud-top-actions hidden">
+    <button type="button" id="pauseBtn" class="icon-btn hidden" aria-label="Pause race">❚❚</button>
+    <button type="button" id="hudSettingsBtn" class="icon-btn" aria-label="Graphics and Audio Settings">⚙</button>
+  </div>
+
+  <!-- Main Garage & Track Selector Overlay -->
+  <main id="menu" class="garage-shell">
+    <section class="garage-panel" aria-labelledby="appTitle">
+      <header class="garage-header">
+        <div>
+          <h1 id="appTitle">APEX RUSH <span class="badge-next">NEXT</span></h1>
+          <p class="sub">DRIFT · NITROUS · MULTIPLAYER</p>
+        </div>
+        <button type="button" id="settingsBtn" class="chip-btn">⚙ SETTINGS</button>
+      </header>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="nameInput">DRIVER NAME</label>
+          <input
+            class="txt"
+            id="nameInput"
+            maxlength="14"
+            placeholder="Enter driver name"
+            autocomplete="nickname"
+            autocorrect="off"
+            autocapitalize="none"
+            spellcheck="false"
+          >
+        </div>
+        <div class="field best-box">
+          <span class="label-txt">TRACK RECORD</span>
+          <b id="menuBest">--:--.---</b>
+        </div>
+      </div>
+
+      <div class="section-label">SELECT CAR</div>
+      <div class="car-list" id="carList"></div>
+
+      <div class="custom-row">
+        <div>
+          <div class="section-label">PAINT</div>
+          <div id="colors" class="swatches"></div>
+        </div>
+        <div>
+          <div class="section-label">UNDERGLOW</div>
+          <div id="underglows" class="swatches"></div>
+        </div>
+      </div>
+
+      <div class="section-label">SELECT TRACK</div>
+      <div class="track-grid" id="trackGrid"></div>
+
+      <div class="opts-row">
+        <div>
+          <div class="section-label">BOTS</div>
+          <div class="seg" id="diff">
+            <button type="button" data-d="easy">Easy</button>
+            <button type="button" data-d="normal" class="sel">Normal</button>
+            <button type="button" data-d="hard">Hard</button>
+          </div>
+        </div>
+        <div>
+          <div class="section-label" id="lapsLabel">LAPS</div>
+          <div class="seg" id="lapsSeg">
+            <button type="button" data-l="2">2</button>
+            <button type="button" data-l="3" class="sel">3</button>
+            <button type="button" data-l="5">5</button>
+            <button type="button" id="sprintLapBtn" class="sel hidden" disabled>1 (One-Way)</button>
+          </div>
+        </div>
+      </div>
+
+      <button type="button" class="btn primary" id="startBtn">START SOLO RACE</button>
+
+      <div class="mp-actions">
+        <button type="button" class="btn secondary" id="hostBtn">HOST ONLINE</button>
+        <div class="joinrow">
+          <label for="codeInput" class="visually-hidden">5-character room code</label>
+          <input
+            class="txt code-txt"
+            id="codeInput"
+            maxlength="5"
+            placeholder="CODE"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="characters"
+            spellcheck="false"
+          >
+          <button type="button" class="btn" id="joinBtn">JOIN</button>
+        </div>
+      </div>
+      <div class="small status-msg" id="netStatus" role="status" aria-live="polite"></div>
+    </section>
+
+    <div class="showroom-hint" aria-hidden="true">
+      <span>Drag to orbit 3D car · Drift: <b>SPACE / ↓</b> · NOS: <b>SHIFT</b></span>
+    </div>
+  </main>
+
+  <!-- Multiplayer Lobby -->
+  <section id="lobby" class="overlay hidden" aria-labelledby="lobbyHeading">
+    <div class="card">
+      <h2 id="lobbyHeading">ONLINE RACE LOBBY</h2>
+      <div class="room-code-box">
+        <div class="section-label">ROOM CODE</div>
+        <div id="roomCode">-----</div>
+        <p class="small">Friends enter this 5-letter code on the main garage menu to join</p>
+      </div>
+
+      <div class="plist" id="playerList"></div>
+
+      <div id="hostCtl">
+        <div class="field-stack">
+          <label for="lobbyTrackSel">TRACK</label>
+          <select id="lobbyTrackSel" class="txt select-txt"></select>
+        </div>
+        <div class="field-stack">
+          <div class="section-label" id="botsLabel">AI TRAFFIC BOTS</div>
+          <div class="seg" id="bots" role="group" aria-labelledby="botsLabel">
+            <button type="button" data-n="0">None</button>
+            <button type="button" data-n="3" class="sel">3</button>
+            <button type="button" data-n="5">5</button>
+          </div>
+        </div>
+        <button type="button" class="btn primary" id="lobbyStart">START RACE</button>
+      </div>
+
+      <div id="clientTrackInfo" class="hidden small">
+        Track: <b id="clientTrackName"></b>
+      </div>
+      <div class="small" id="lobbyWait"></div>
+      <div class="small status-msg" id="lobbyNote"></div>
+      <button type="button" class="btn" id="lobbyLeave">LEAVE ROOM</button>
+    </div>
+  </section>
+
+  <!-- Finish Results -->
+  <section id="finish" class="overlay hidden" aria-labelledby="finishHeading">
+    <div class="card">
+      <div class="section-label finish-kicker" id="finishHeading">RACE COMPLETE</div>
+      <div class="fin-rank">
+        <div id="finPos">1<sup>st</sup></div>
+        <div class="small" id="finOf">of 6</div>
+      </div>
+      <div class="fin-stats">
+        <div class="stat"><span>TOTAL TIME</span><b id="finTime"></b></div>
+        <div class="stat"><span>BEST LAP</span><b id="finBest"></b></div>
+        <div class="stat"><span>DRIFT SCORE</span><b id="finDrift"></b></div>
+      </div>
+      <div id="finRecord" class="hidden">★ NEW TRACK RECORD ★</div>
+      <div class="plist" id="results"></div>
+      <div class="small" id="finNote"></div>
+      <div class="card-actions">
+        <button type="button" class="btn primary" id="againBtn">RACE AGAIN</button>
+        <button type="button" class="btn" id="finQuitBtn">GARAGE MENU</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Native Pause Modal Dialog -->
+  <dialog id="pauseDialog" aria-labelledby="pauseTitle">
+    <h2 id="pauseTitle">PAUSED</h2>
+    <form method="dialog" class="dialog-stack">
+      <button type="submit" value="resume" class="btn primary" autofocus>RESUME</button>
+      <button type="submit" value="restart" id="pauseRestartBtn" class="btn">RESTART RACE</button>
+      <button type="submit" value="quit" id="pauseQuitBtn" class="btn">QUIT TO GARAGE</button>
+    </form>
+  </dialog>
+
+  <!-- Native Settings & Controls Dialog -->
+  <dialog id="settingsDialog" closedby="any" aria-labelledby="settingsTitle">
+    <div class="dialog-head">
+      <h2 id="settingsTitle">SETTINGS &amp; CONTROLS</h2>
+      <form method="dialog">
+        <button type="submit" value="close" class="chip-btn" aria-label="Close settings">✕ Close</button>
+      </form>
+    </div>
+
+    <div class="section-label">GRAPHICS QUALITY</div>
+    <div class="seg" id="qualitySeg">
+      <button type="button" data-q="medium">Medium</button>
+      <button type="button" data-q="high" class="sel">High (Bloom)</button>
+      <button type="button" data-q="ultra">Ultra (MSAA + Bloom)</button>
+    </div>
+
+    <div class="field-stack" style="margin-block-start: 14px;">
+      <label for="volRange">MASTER VOLUME</label>
+      <input type="range" id="volRange" min="0" max="100" value="80">
+    </div>
+
+    <div class="section-label">KEYBOARD &amp; GAMEPAD CONTROLS</div>
+    <dl class="controls-grid">
+      <dt>Gas / Accelerate</dt><dd>W or ↑ (RT)</dd>
+      <dt>Brake / Reverse</dt><dd>S or ↓ when stopped (LT)</dd>
+      <dt>Steer</dt><dd>A / D or ← / → (Stick)</dd>
+      <dt>Drift (Charges NOS)</dt><dd>SPACE or ↓ at speed (A / X)</dd>
+      <dt>NOS Boost</dt><dd>SHIFT (B / Y / RB)</dd>
+      <dt>Camera View</dt><dd>C</dd>
+      <dt>Reset to Track</dt><dd>R</dd>
+      <dt>Mute / Pause</dt><dd>M / P or Esc</dd>
+    </dl>
+  </dialog>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
+
