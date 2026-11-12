@@ -293,6 +293,95 @@ export class AudioManager {
     n.stop(t + 0.16);
   }
 
+  playGunshot(isPlayer: boolean): void {
+    if (!this.ctx || this.muted) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const gainScale = isPlayer ? 1.0 : 0.38;
+
+    // Punchy breech thump
+    const o = ctx.createOscillator();
+    const og = ctx.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(isPlayer ? 240 : 200, t);
+    o.frequency.exponentialRampToValueAtTime(58, t + 0.065);
+    og.gain.setValueAtTime(0.16 * gainScale, t);
+    og.gain.exponentialRampToValueAtTime(0.001, t + 0.075);
+    o.connect(og);
+    og.connect(this.master);
+    o.start(t);
+    o.stop(t + 0.08);
+
+    // Muzzle crack burst
+    const n = ctx.createBufferSource();
+    n.buffer = this.noise;
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = isPlayer ? 1450 : 1200;
+    f.Q.value = 1.1;
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.18 * gainScale, t);
+    ng.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+    n.connect(f);
+    f.connect(ng);
+    ng.connect(this.master);
+    n.start(t, Math.random());
+    n.stop(t + 0.08);
+  }
+
+  playHitMarker(): void {
+    if (!this.ctx || this.muted) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(1750, t);
+    o.frequency.exponentialRampToValueAtTime(2450, t + 0.035);
+    g.gain.setValueAtTime(0.11, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.045);
+    o.connect(g);
+    g.connect(this.master);
+    o.start(t);
+    o.stop(t + 0.05);
+  }
+
+  playExplosion(proximity = 1): void {
+    if (!this.ctx || this.muted) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const s = clamp(proximity, 0.25, 1.0);
+
+    // Sub-bass detonation drop
+    const o = ctx.createOscillator();
+    const og = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(105, t);
+    o.frequency.exponentialRampToValueAtTime(26, t + 0.48);
+    og.gain.setValueAtTime(0.55 * s, t);
+    og.gain.exponentialRampToValueAtTime(0.001, t + 0.56);
+    o.connect(og);
+    og.connect(this.master);
+    o.start(t);
+    o.stop(t + 0.6);
+
+    // Debris explosion roar
+    const n = ctx.createBufferSource();
+    n.buffer = this.noise;
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.setValueAtTime(1600, t);
+    f.frequency.exponentialRampToValueAtTime(220, t + 0.65);
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.48 * s, t);
+    ng.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
+    n.connect(f);
+    f.connect(ng);
+    ng.connect(this.master);
+    n.start(t, Math.random());
+    n.stop(t + 0.72);
+  }
+
   setVolume(v: number): void {
     this.volume = clamp(v, 0, 1);
     if (this.ctx && !this.muted) {

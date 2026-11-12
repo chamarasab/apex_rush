@@ -27,6 +27,7 @@ import { CameraController } from './CameraController';
 import { RaceManager, loadBestLap } from './RaceManager';
 import { HUD } from '../ui/HUD';
 import { cleanProfile, Net, type PlayerProfile, type RaceStartConfig } from '../net/Net';
+import { WeaponSystem } from '../combat/Weapons';
 import { fmtTime, ordinal } from './config';
 
 const PROFILE_KEY = 'apexnext_profile';
@@ -76,6 +77,9 @@ export class Game {
   private camCtl: CameraController;
   private input: PlayerController;
   private net: Net;
+  private weapons: WeaponSystem;
+  private playerAimTarget = new THREE.Vector3();
+  private lockedTarget: Car | null = null;
 
   private state: 'menu' | 'race' = 'menu';
   private screen: 'menu' | 'lobby' | 'finish' | null = 'menu';
@@ -152,6 +156,7 @@ export class Game {
     this.race = new RaceManager(this.track);
     this.camCtl = new CameraController(this.camera);
     this.input = new PlayerController(a => this.action(a));
+    this.weapons = new WeaponSystem(this.scene);
     this.net = new Net({
       onLobby: () => this.onLobby(),
       onLeft: id => this.onLeft(id),
@@ -585,6 +590,8 @@ export class Game {
     this.autoPilot = null;
     this.particles.reset();
     this.skids.reset();
+    this.weapons.reset();
+    this.lockedTarget = null;
   }
 
   private place(car: Car, idx: number, lat: number): void {
@@ -610,6 +617,11 @@ export class Game {
     car.pitch = -Math.atan(car.slopeRel);
     car.onGrass = false;
     car.surface = t.surfaceAt(idx);
+    car.hp = car.maxHp;
+    car.blasted = false;
+    car.blastTimer = 0;
+    car.sinceHit = 99;
+    car.mesh.visible = true;
     car.skidLast[0] = car.skidLast[1] = null;
     car.mesh.rotation.set(car.pitch, car.h, 0);
     const n = car.net;
@@ -1010,6 +1022,7 @@ export class Game {
     this.$('finTime').textContent = fmtTime(r.finishTime);
     this.$('finBest').textContent = fmtTime(r.best);
     this.$('finDrift').textContent = `${Math.round(p.totalDriftScore).toLocaleString()} pts`;
+    this.$('finBlasts').textContent = String(p.takedowns);
     this.$('finRecord').classList.toggle('hidden', !this.race.newRecord);
 
     const box = this.$('results');
@@ -1034,6 +1047,73 @@ export class Game {
     });
   }
 
+  private respawnBlastedCar(victim: Car): void {
+    const t = this.track;
+    const N = t.N;
+    // Wrong-way self-destruct (no attacker): respawn at current track spot facing forward
+    if (victim === this.player && !victim.lastAttackerId) {
+      this.place(victim, victim.idx, 0);
+      const rollSpd = clamp(24, 18, victim.topSpeed * 0.6);
+      victim.speed = rollSpd;
+      victim.vx = Math.sin(victim.h) * rollSpd;
+      victim.vz = Math.cos(victim.h) * rollSpd;
+      victim.respawnProtect = 2.2;
+      if (victim.race) victim.race.wrongT = 0;
+      this.camCtl.snap(victim);
+      this.hud.toast('Respawned facing track!', 1.8);
+      return;
+    }
+
+    let anchor: Car | null = victim.lastAttackerId ? this.carById.get(victim.lastAttackerId) || null : null;
+    if (!anchor || anchor === victim || anchor.blasted) {
+      anchor =
+        this.player && this.player !== victim && !this.player.blasted
+          ? this.player
+          : this.cars.find(c => c !== victim && !c.blasted) || victim;
+    }
+
+    const stepsBack = Math.round((26 + Math.random() * 6) / t.ds);
+    const respawnIdx = t.open
+      ? clamp(anchor.idx - stepsBack, Math.max(2, t.startIdx - 12), t.finishIdx - 8)
+      : (((anchor.idx - stepsBack) % N) + N) % N;
+    const laneLim = Math.max(1.8, t.roadHalf - 2.0);
+    const sideSign = Math.abs(anchor.lat) < 1.5 ? (Math.random() < 0.5 ? -1 : 1) : -Math.sign(anchor.lat);
+    const laneLat = clamp(sideSign * (2.2 + Math.random() * 1.1), -laneLim, laneLim);
+
+    this.place(victim, respawnIdx, laneLat);
+    const rollSpd = clamp(Math.max(24, anchor.speed * 0.86), 18, victim.topSpeed * 0.88);
+    victim.speed = rollSpd;
+    victim.vx = Math.sin(victim.h) * rollSpd;
+    victim.vz = Math.cos(victim.h) * rollSpd;
+    victim.respawnProtect = 2.2;
+    victim.lastAttackerId = null;
+
+    if (anchor !== victim) {
+      this.race.syncRespawnBehind(victim, anchor, respawnIdx, stepsBack);
+    }
+    if (victim === this.player) {
+      this.camCtl.snap(victim);
+      this.hud.toast('Respawned behind — Chase them down!', 1.8);
+    }
+  }
+
+  private handleBlast(victim: Car, shooter: Car | null, wrongWay = false): void {
+    const player = this.player!;
+    const dist = Math.hypot(victim.x - player.x, victim.z - player.z);
+    this.audio.playExplosion(clamp(1 - dist / 140, 0.28, 1.0));
+    if (dist < 65) {
+      this.camCtl.shake = Math.min(1.0, Math.max(this.camCtl.shake, 0.72 * (1 - dist / 75)));
+    }
+    if (wrongWay) {
+      this.hud.toast('AUTO-EXPLODED — Wrong way for 5s!', 2.2);
+    } else if (shooter === player) {
+      player.nos = Math.min(100, player.nos + 25);
+      this.hud.toast(`★ BLASTED ${victim.name}! +25% NOS`, 2.2);
+    } else if (victim === player) {
+      this.hud.toast(`BLASTED by ${shooter ? shooter.name : 'enemy fire'}! Respawning...`, 2.0);
+    }
+  }
+
   private step(dt: number): void {
     const race = this.race;
     const player = this.player!;
@@ -1051,11 +1131,45 @@ export class Game {
     for (const c of this.cars) {
       if (c.remote) c.stepRemote(dt, this.track);
       else c.step(dt, this.track, this.cars);
+      if (c.blasted && c.blastTimer <= 0 && !c.remote) {
+        this.respawnBlastedCar(c);
+      }
     }
 
     if (player.bovTrigger) this.audio.playBovFlutter();
     if (player.nosActive && !player.wasBoosted) this.audio.playNosIgnite();
     player.wasBoosted = player.nosActive;
+
+    let aimTarget: THREE.Vector3 | null = null;
+    if (!player.blasted && !player.race?.finished) {
+      const ndcX = this.isTouch ? 0 : this.input.mouse.ndcX;
+      const ndcY = this.isTouch ? 0.14 : this.input.mouse.ndcY;
+      this.lockedTarget = this.weapons.resolvePlayerAim(player, this.camera, ndcX, ndcY, this.cars, this.playerAimTarget);
+      aimTarget = this.playerAimTarget;
+    } else {
+      this.lockedTarget = null;
+    }
+
+    const combatEv = {
+      onFire: (car: Car) => {
+        const d = Math.hypot(car.x - player.x, car.z - player.z);
+        if (car === player || d < 75) {
+          this.audio.playGunshot(car === player);
+        }
+        if (car === player) {
+          this.camCtl.shake = Math.max(this.camCtl.shake, 0.045);
+        }
+      },
+      onHit: (_victim: Car, shooter: Car | null) => {
+        if (shooter === player) {
+          this.hud.flashHit();
+          this.audio.playHitMarker();
+        }
+      },
+      onBlast: (victim: Car, shooter: Car | null) => this.handleBlast(victim, shooter),
+    };
+
+    this.weapons.update(dt, this.cars, race.phase === 'racing', aimTarget, this.particles, combatEv);
 
     this.collideCars();
     race.update(dt, {
@@ -1075,6 +1189,12 @@ export class Game {
       finish: car => {
         if (car === this.player) this.onPlayerFinish();
       },
+      wrongWayBlast: car => {
+        this.weapons.blastCar(car, null, this.particles, {
+          ...combatEv,
+          onBlast: victim => this.handleBlast(victim, null, true),
+        });
+      },
     });
 
     this.effects(dt);
@@ -1091,6 +1211,7 @@ export class Game {
       for (let j = i + 1; j < cars.length; j++) {
         const a = cars[i];
         const b = cars[j];
+        if (a.blasted || b.blasted) continue;
         if (a.remote && b.remote) continue;
         if (Math.abs(a.x - b.x) > 6.5 || Math.abs(a.z - b.z) > 6.5) continue;
 
@@ -1148,6 +1269,7 @@ export class Game {
     const smokeChance = this.quality === 'ultra' ? 1.0 : this.quality === 'high' ? 0.75 : 0.45;
 
     for (const car of this.cars) {
+      if (car.blasted) continue;
       const sh = Math.sin(car.h);
       const ch = Math.cos(car.h);
       const spd = Math.hypot(car.vx, car.vz);
@@ -1351,6 +1473,14 @@ export class Game {
         this.camCtl.update(p, dtReal);
         this.updateGear(p);
         this.hud.update(p, this.cars, this.race, this.gear, this.rpm, dtReal);
+        this.hud.updateCrosshair(
+          this.input.mouse.x,
+          this.input.mouse.y,
+          !!this.lockedTarget,
+          !!(p.input.fire && !p.blasted && this.race.phase === 'racing'),
+          !this.isTouch && !this.finishShown && !p.blasted,
+          dtReal
+        );
         if (this.finishShown && (this.resultsT -= dtReal) <= 0) {
           this.resultsT = 0.5;
           this.updateResults();

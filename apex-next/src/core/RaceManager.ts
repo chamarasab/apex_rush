@@ -25,6 +25,7 @@ export interface RaceEvents {
   countdown: (n: number) => void;
   lap: (car: Car, lapTime: number) => void;
   finish: (car: Car) => void;
+  wrongWayBlast?: (car: Car) => void;
 }
 
 export class RaceManager {
@@ -42,6 +43,8 @@ export class RaceManager {
   cd = 0;
   cdStage = -1;
   wrongWay = false;
+  wrongWayTime = 0;
+  readonly wrongWayLimit = 5.0;
   newRecord = false;
 
   constructor(track: Track) {
@@ -78,12 +81,22 @@ export class RaceManager {
     this.cd = 0;
     this.cdStage = -1;
     this.wrongWay = false;
+    this.wrongWayTime = 0;
     this.newRecord = false;
     this.track.setCountdownLights(-1);
 
     for (const c of cars) {
       c.frozen = true;
       c.nos = 100;
+      c.hp = c.maxHp;
+      c.blasted = false;
+      c.blastTimer = 0;
+      c.respawnProtect = 0;
+      c.sinceHit = 99;
+      c.takedowns = 0;
+      c.lastAttackerId = null;
+      c.gunYaw = c.targetGunYaw = 0;
+      c.gunPitch = c.targetGunPitch = 0.02;
       c.driftScore = 0;
       c.totalDriftScore = 0;
       c.race = {
@@ -215,8 +228,18 @@ export class RaceManager {
       const pr = p.race;
       const i = p.idx;
       const facing = Math.sin(p.h) * t.tx[i] + Math.cos(p.h) * t.tz[i];
-      pr.wrongT = facing < -0.25 && p.speed > 3 && !pr.finished ? pr.wrongT + dt : 0;
-      this.wrongWay = pr.wrongT > 0.8;
+      const velAlong = p.vx * t.tx[i] + p.vz * t.tz[i];
+      const spd = Math.hypot(p.vx, p.vz);
+      const goingWrongWay = (facing < -0.25 && spd > 2.5) || (velAlong < -3.0 && facing < 0);
+      pr.wrongT = goingWrongWay && !pr.finished && !p.blasted ? pr.wrongT + dt : 0;
+      this.wrongWayTime = pr.wrongT;
+      this.wrongWay = pr.wrongT > 0.8 && !p.blasted;
+      if (pr.wrongT >= this.wrongWayLimit && !p.blasted && !pr.finished) {
+        pr.wrongT = 0;
+        this.wrongWayTime = 0;
+        this.wrongWay = false;
+        ev.wrongWayBlast?.(p);
+      }
     }
   }
 
@@ -230,6 +253,28 @@ export class RaceManager {
     return r.cp > 0
       ? { idx: this.cpIdx[(r.cp - 1) % this.NCP], lat: 0 }
       : { idx: r.startIdx, lat: r.startLat };
+  }
+
+  syncRespawnBehind(victim: Car, anchor: Car, respawnIdx: number, stepsBack: number): void {
+    const r = victim.race;
+    const ar = anchor.race;
+    if (!r) return;
+    const N = this.track.N;
+    if (this.track.open) {
+      let cp = 0;
+      while (cp < this.NCP - 1 && respawnIdx >= this.cpIdx[cp]) cp++;
+      r.cp = cp;
+      r.prevIdx = respawnIdx;
+      return;
+    }
+    if (ar && r.cp >= ar.cp) {
+      const crossedPrev =
+        ar.cp > 0 && ((anchor.idx - this.cpIdx[(ar.cp - 1) % this.NCP] + N) % N) <= stepsBack;
+      const targetCp = crossedPrev ? Math.max(0, ar.cp - 1) : ar.cp;
+      r.cp = targetCp;
+      r.lap = Math.min(this.laps, Math.floor(r.cp / this.NCP) + 1);
+    }
+    r.prevIdx = respawnIdx;
   }
 }
 

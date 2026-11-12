@@ -25,6 +25,12 @@ export interface CarVisualRig {
   }[];
   nosFlames: THREE.Group[];
   nosLight: THREE.PointLight | null;
+  turretRoot: THREE.Group;
+  turretYaw: THREE.Group;
+  turretPitch: THREE.Group;
+  turretRecoil: THREE.Group;
+  muzzleFlash: THREE.Group;
+  muzzlePoint: THREE.Object3D;
   dispose: () => void;
 }
 
@@ -249,6 +255,11 @@ interface SharedCarAssets {
   mPlate: THREE.MeshStandardMaterial;
   mFlameCore: THREE.MeshBasicMaterial;
   mFlameOuter: THREE.MeshBasicMaterial;
+  mGunMetal: THREE.MeshStandardMaterial;
+  mGunBarrel: THREE.MeshStandardMaterial;
+  mGunAccent: THREE.MeshStandardMaterial;
+  mGunSight: THREE.MeshBasicMaterial;
+  mMuzzleFlash: THREE.MeshBasicMaterial;
   glowTex: THREE.CanvasTexture;
   contactShadowTex: THREE.CanvasTexture;
   icTex: THREE.CanvasTexture;
@@ -295,6 +306,24 @@ function getSharedAssets(): SharedCarAssets {
       color: 0x00b7ff,
       transparent: true,
       opacity: 0.72,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    }),
+    mGunMetal: new THREE.MeshStandardMaterial({ color: 0x222832, roughness: 0.34, metalness: 0.84 }),
+    mGunBarrel: new THREE.MeshStandardMaterial({ color: 0x0d1016, roughness: 0.24, metalness: 0.94 }),
+    mGunAccent: new THREE.MeshStandardMaterial({
+      color: 0xff6d00,
+      emissive: new THREE.Color(0xff4500),
+      emissiveIntensity: 0.75,
+      roughness: 0.3,
+      metalness: 0.4,
+    }),
+    mGunSight: new THREE.MeshBasicMaterial({ color: 0x00e5ff, toneMapped: false }),
+    mMuzzleFlash: new THREE.MeshBasicMaterial({
+      color: 0xffd25a,
+      transparent: true,
+      opacity: 0.94,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       toneMapped: false,
@@ -645,6 +674,131 @@ function addSupraArchWing(
   mesh.castShadow = true;
   group.add(mesh);
   disposables.push(geo);
+}
+
+interface BonnetGunParts {
+  turretRoot: THREE.Group;
+  turretYaw: THREE.Group;
+  turretPitch: THREE.Group;
+  turretRecoil: THREE.Group;
+  muzzleFlash: THREE.Group;
+  muzzlePoint: THREE.Object3D;
+}
+
+function buildBonnetGun(
+  A: SharedCarAssets,
+  disposables: { dispose: () => void }[],
+  mountY: number,
+  mountZ: number
+): BonnetGunParts {
+  const turretRoot = new THREE.Group();
+  turretRoot.position.set(0, mountY, mountZ);
+
+  const pedGeo = new THREE.CylinderGeometry(0.18, 0.215, 0.06, 16);
+  const collarGeo = new THREE.CylinderGeometry(0.155, 0.175, 0.02, 16);
+  const yokeGeo = new THREE.BoxGeometry(0.24, 0.095, 0.14);
+  const bodyGeo = new THREE.BoxGeometry(0.21, 0.11, 0.36);
+  const drumGeo = new THREE.CylinderGeometry(0.068, 0.068, 0.12, 12);
+  drumGeo.rotateZ(Math.PI / 2);
+  const sightFrameGeo = new THREE.BoxGeometry(0.06, 0.045, 0.09);
+  const sightDotGeo = new THREE.SphereGeometry(0.015, 8, 8);
+  const shroudGeo = new THREE.BoxGeometry(0.175, 0.068, 0.28);
+  const barrelGeo = new THREE.CylinderGeometry(0.022, 0.024, 0.56, 10);
+  barrelGeo.rotateX(Math.PI / 2);
+  const brakeGeo = new THREE.CylinderGeometry(0.032, 0.026, 0.075, 10);
+  brakeGeo.rotateX(Math.PI / 2);
+  const flashConeGeo = new THREE.ConeGeometry(0.09, 0.36, 8);
+  flashConeGeo.rotateX(Math.PI / 2);
+  const flashCoreGeo = new THREE.SphereGeometry(0.075, 8, 8);
+
+  disposables.push(
+    pedGeo,
+    collarGeo,
+    yokeGeo,
+    bodyGeo,
+    drumGeo,
+    sightFrameGeo,
+    sightDotGeo,
+    shroudGeo,
+    barrelGeo,
+    brakeGeo,
+    flashConeGeo,
+    flashCoreGeo
+  );
+
+  const ped = new THREE.Mesh(pedGeo, A.mGunMetal);
+  ped.position.y = 0.005;
+  ped.castShadow = true;
+  const collar = new THREE.Mesh(collarGeo, A.mGunAccent);
+  collar.position.y = 0.038;
+  turretRoot.add(ped, collar);
+
+  const turretYaw = new THREE.Group();
+  turretYaw.position.y = 0.048;
+  turretRoot.add(turretYaw);
+
+  const yoke = new THREE.Mesh(yokeGeo, A.mGunMetal);
+  yoke.position.y = 0.045;
+  yoke.castShadow = true;
+  turretYaw.add(yoke);
+
+  const turretPitch = new THREE.Group();
+  turretPitch.position.y = 0.098;
+  turretYaw.add(turretPitch);
+
+  const turretRecoil = new THREE.Group();
+  turretPitch.add(turretRecoil);
+
+  const receiver = new THREE.Mesh(bodyGeo, A.mGunMetal);
+  receiver.position.set(0, 0, -0.02);
+  receiver.castShadow = true;
+  turretRecoil.add(receiver);
+
+  const ammoDrum = new THREE.Mesh(drumGeo, A.mGunMetal);
+  ammoDrum.position.set(0.145, -0.01, -0.02);
+  ammoDrum.castShadow = true;
+  const ammoStripe = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.06, 0.08), A.mGunAccent);
+  disposables.push(ammoStripe.geometry);
+  ammoStripe.position.set(0.195, -0.01, -0.02);
+  turretRecoil.add(ammoDrum, ammoStripe);
+
+  const sight = new THREE.Mesh(sightFrameGeo, A.mGunBarrel);
+  sight.position.set(0, 0.075, -0.02);
+  const sightDot = new THREE.Mesh(sightDotGeo, A.mGunSight);
+  sightDot.position.set(0, 0.078, 0.028);
+  turretRecoil.add(sight, sightDot);
+
+  const shroud = new THREE.Mesh(shroudGeo, A.mGunBarrel);
+  shroud.position.set(0, 0.004, 0.25);
+  shroud.castShadow = true;
+  turretRecoil.add(shroud);
+
+  for (const sx of [-1, 1]) {
+    const barrel = new THREE.Mesh(barrelGeo, A.mGunBarrel);
+    barrel.position.set(sx * 0.055, 0.004, 0.34);
+    barrel.castShadow = true;
+    const brake = new THREE.Mesh(brakeGeo, A.mChrome);
+    brake.position.set(sx * 0.055, 0.004, 0.625);
+    turretRecoil.add(barrel, brake);
+  }
+
+  const muzzleFlash = new THREE.Group();
+  muzzleFlash.position.set(0, 0.004, 0.67);
+  muzzleFlash.visible = false;
+  for (const sx of [-1, 1]) {
+    const cone = new THREE.Mesh(flashConeGeo, A.mMuzzleFlash);
+    cone.position.set(sx * 0.055, 0, 0.16);
+    const core = new THREE.Mesh(flashCoreGeo, A.mMuzzleFlash);
+    core.position.set(sx * 0.055, 0, 0.02);
+    muzzleFlash.add(cone, core);
+  }
+  turretRecoil.add(muzzleFlash);
+
+  const muzzlePoint = new THREE.Object3D();
+  muzzlePoint.position.set(0, 0.004, 0.67);
+  turretRecoil.add(muzzlePoint);
+
+  return { turretRoot, turretYaw, turretPitch, turretRecoil, muzzleFlash, muzzlePoint };
 }
 
 export function buildCarVisual(
@@ -1448,6 +1602,9 @@ export function buildCarVisual(
     bodyGroup.add(nosLight);
   }
 
+  const turret = buildBonnetGun(A, disposables, S.bonnetGun[0], S.bonnetGun[1]);
+  bodyGroup.add(turret.turretRoot);
+
   // Grounding dark ambient occlusion contact shadow plane beneath vehicle
   const aoGeo = new THREE.PlaneGeometry(S.width + 0.95, S.length + 0.95);
   aoGeo.rotateX(-Math.PI / 2);
@@ -1493,6 +1650,12 @@ export function buildCarVisual(
     wheels,
     nosFlames,
     nosLight,
+    turretRoot: turret.turretRoot,
+    turretYaw: turret.turretYaw,
+    turretPitch: turret.turretPitch,
+    turretRecoil: turret.turretRecoil,
+    muzzleFlash: turret.muzzleFlash,
+    muzzlePoint: turret.muzzlePoint,
     dispose: () => {
       for (const d of disposables) d.dispose();
     },

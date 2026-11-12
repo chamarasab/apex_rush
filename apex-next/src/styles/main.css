@@ -743,6 +743,101 @@
     color: var(--accent-gold);
   }
 
+  .row.blasts b {
+    color: var(--accent-orange);
+  }
+
+  #crosshair {
+    position: fixed;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    inline-size: 54px;
+    block-size: 54px;
+    margin-inline-start: -27px;
+    margin-block-start: -27px;
+    pointer-events: none;
+    color: rgba(0, 229, 255, 0.88);
+    filter: drop-shadow(0 0 6px rgba(0, 229, 255, 0.55));
+    z-index: 4;
+    will-change: transform;
+  }
+
+  #crosshair .reticle-ring {
+    transform-origin: 32px 32px;
+    @media (prefers-reduced-motion: no-preference) {
+      transition: transform 0.12s ease-out;
+    }
+  }
+
+  #crosshair.locked {
+    color: #ff4526;
+    filter: drop-shadow(0 0 10px rgba(255, 69, 38, 0.85));
+  }
+
+  #crosshair.locked .reticle-ring {
+    transform: scale(0.84);
+  }
+
+  #crosshair.firing .reticle-ring {
+    transform: scale(1.12);
+  }
+
+  #crosshair .hit-x {
+    opacity: 0;
+    @media (prefers-reduced-motion: no-preference) {
+      transition: opacity 0.1s ease-out;
+    }
+  }
+
+  #crosshair.hit .hit-x {
+    opacity: 1;
+  }
+
+  #hpWrap {
+    inline-size: 190px;
+    padding: 6px 10px;
+    border-radius: 10px;
+    background: rgba(8, 12, 22, 0.78);
+    border: 1px solid rgba(88, 255, 122, 0.3);
+  }
+
+  #hpWrap.low {
+    border-color: rgba(255, 59, 77, 0.75);
+    box-shadow: 0 0 16px rgba(255, 59, 77, 0.4);
+  }
+
+  .hp-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 1.2px;
+    color: var(--accent-green);
+    margin-block-end: 4px;
+  }
+
+  #hpWrap.low .hp-header {
+    color: var(--accent-red);
+  }
+
+  .hp-track {
+    block-size: 7px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.14);
+    overflow: hidden;
+  }
+
+  #hpFill {
+    block-size: 100%;
+    inline-size: var(--hp-pct, 100%);
+    background: linear-gradient(90deg, #2ee866, #8cff9b);
+    transition: inline-size 0.1s linear;
+  }
+
+  #hpWrap.low #hpFill {
+    background: linear-gradient(90deg, #ff2a40, #ff8f3f);
+  }
+
   #minimap {
     position: absolute;
     inset-inline-start: 14px;
@@ -984,11 +1079,22 @@
     border-color: var(--accent-cyan);
     background: rgba(0, 160, 220, 0.45);
   }
+  #tFire {
+    inset-inline-end: 18px;
+    inset-block-end: 192px;
+    inline-size: 66px;
+    block-size: 66px;
+    font-size: 13px;
+    border-color: var(--accent-orange);
+    background: rgba(255, 90, 24, 0.55);
+  }
 
   body.touch #minimap { inset-block-end: auto; inset-block-start: 114px; inline-size: 116px; block-size: 116px; }
   body.touch .hud-bottom-right { inset-block-end: auto; inset-block-start: 126px; }
   body.touch #speedo { inline-size: 124px; block-size: 124px; }
-  body.touch #nosWrap { inline-size: 140px; }
+  body.touch #nosWrap,
+  body.touch #hpWrap { inline-size: 140px; }
+  body.touch #crosshair,
   body.touch #help,
   body.touch #board { display: none; }
 

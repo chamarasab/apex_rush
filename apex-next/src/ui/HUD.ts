@@ -17,6 +17,7 @@ export class HUD {
 
   private cache: Record<string, string> = {};
   private toastT = 0;
+  private hitMarkerT = 0;
   kmh = 0;
   boardKey: string | null = null;
   private lines: { a: number; r: number; len: number; spd: number }[] = [];
@@ -26,6 +27,7 @@ export class HUD {
     this.el = {};
     const ids = [
       'hud',
+      'crosshair',
       'posNum',
       'posSuf',
       'posTot',
@@ -36,12 +38,16 @@ export class HUD {
       'tLap',
       'tLast',
       'tBest',
+      'hudBlasts',
       'countdown',
       'wrongway',
       'toast',
       'help',
       'driftBadge',
       'driftPts',
+      'hpFill',
+      'hpPct',
+      'hpWrap',
       'nosFill',
       'nosPct',
       'nosTag',
@@ -175,6 +181,25 @@ export class HUD {
     this.toastT = dur;
   }
 
+  flashHit(): void {
+    this.hitMarkerT = 0.14;
+    this.el.crosshair?.classList.add('hit');
+  }
+
+  updateCrosshair(x: number, y: number, locked: boolean, firing: boolean, visible: boolean, dt: number): void {
+    const ch = this.el.crosshair;
+    if (!ch) return;
+    ch.classList.toggle('hidden', !visible);
+    if (!visible) return;
+    ch.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
+    ch.classList.toggle('locked', locked);
+    ch.classList.toggle('firing', firing);
+    if (this.hitMarkerT > 0) {
+      this.hitMarkerT -= dt;
+      if (this.hitMarkerT <= 0) ch.classList.remove('hit');
+    }
+  }
+
   updateBoard(sorted: Car[], player: Car): void {
     const key = sorted.map(c => c.id).join('|');
     if (key === this.boardKey || !this.el.board) return;
@@ -209,6 +234,10 @@ export class HUD {
 
     this.updateBoard(race.sorted, player);
     this.el.wrongway?.classList.toggle('hidden', !race.wrongWay);
+    if (race.wrongWay) {
+      const secs = Math.max(1, Math.ceil(race.wrongWayLimit - race.wrongWayTime));
+      this.set('wrongway', `WRONG WAY · AUTO-BLAST IN ${secs}s`);
+    }
 
     if (this.toastT > 0) {
       this.toastT -= dt;
@@ -221,6 +250,15 @@ export class HUD {
     if (showDrift) {
       this.set('driftPts', `+${Math.round(player.driftScore).toLocaleString()}`);
     }
+
+    // Armor HP bar + Blasts count
+    const hpPct = Math.round(clamp(player.hp, 0, player.maxHp));
+    this.set('hpPct', player.blasted ? 'WRECKED' : `${hpPct}%`);
+    if (this.el.hpFill) {
+      this.el.hpFill.style.setProperty('--hp-pct', `${hpPct}%`);
+    }
+    this.el.hpWrap?.classList.toggle('low', hpPct < 35);
+    this.set('hudBlasts', String(player.takedowns));
 
     // NOS Tank Bar
     const nosPct = Math.round(player.nos);
@@ -333,7 +371,7 @@ export class HUD {
     c.drawImage(this.mmBg, 0, 0);
 
     for (const car of cars) {
-      if (car === player) continue;
+      if (car === player || car.blasted) continue;
       c.beginPath();
       c.arc(car.x * sc + this.mmOx, car.z * sc + this.mmOy, 3.8, 0, 6.2832);
       c.fillStyle = car.colorHex;

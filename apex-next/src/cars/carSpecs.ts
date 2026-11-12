@@ -43,6 +43,7 @@ export interface CarSpec {
   axleFront: number;
   axleRear: number;
   hoodCam: [number, number]; // [y, z]
+  bonnetGun: [number, number]; // [y, z] hood turret mount position
   caliperColor: number;
   rimColor: number;
   engineType: 'rb26' | '2jz' | 'v8' | 'v10' | 'vq37' | 'ev' | 'flat6';
@@ -87,6 +88,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     axleFront: 1.38,
     axleRear: -1.34,
     hoodCam: [1.14, 0.72],
+    bonnetGun: [0.765, 1.42],
     caliperColor: 0xc68e28,
     rimColor: 0xd6dce3, // Machined silver HRE 6-spoke style
     engineType: 'rb26',
@@ -123,6 +125,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     axleFront: 1.34,
     axleRear: -1.30,
     hoodCam: [1.08, 0.66],
+    bonnetGun: [0.80, 1.42],
     caliperColor: 0xe52521,
     rimColor: 0xd8dde4,
     engineType: '2jz',
@@ -160,6 +163,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     axleFront: 1.50,
     axleRear: -1.44,
     hoodCam: [1.18, 0.58],
+    bonnetGun: [0.905, 1.48],
     caliperColor: 0xff2a2a,
     rimColor: 0x262b33,
     engineType: 'v8',
@@ -197,6 +201,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     axleFront: 1.36,
     axleRear: -1.32,
     hoodCam: [0.96, 0.72],
+    bonnetGun: [0.70, 1.56],
     caliperColor: 0xf5c518,
     rimColor: 0x2a2d34,
     engineType: 'v10',
@@ -233,6 +238,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     axleFront: 1.26,
     axleRear: -1.24,
     hoodCam: [1.08, 0.65],
+    bonnetGun: [0.79, 1.32],
     caliperColor: 0xff3b3b,
     rimColor: 0xcfd6df,
     engineType: 'vq37',
@@ -271,6 +277,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     axleFront: 1.64,
     axleRear: -1.58,
     hoodCam: [1.58, 0.72],
+    bonnetGun: [1.14, 1.72],
     caliperColor: 0xff3b30,
     rimColor: 0x1e2228,
     engineType: 'ev',
@@ -308,6 +315,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     axleFront: 1.46,
     axleRear: -1.42,
     hoodCam: [1.58, 0.62],
+    bonnetGun: [1.09, 1.56],
     caliperColor: 0xe62020,
     rimColor: 0x22262e,
     engineType: 'v8',
@@ -345,6 +353,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     axleFront: 1.24,
     axleRear: -1.18,
     hoodCam: [1.06, 0.65],
+    bonnetGun: [0.68, 1.28],
     caliperColor: 0xe62020,
     rimColor: 0x1b1e24, // Fuchs matte black centers with chrome dish lips
     engineType: 'flat6',

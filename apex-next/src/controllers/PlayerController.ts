@@ -6,8 +6,17 @@ export type PlayerAction = 'camera' | 'reset' | 'mute' | 'pause' | 'confirm';
 export class PlayerController {
   private keys: Record<string, boolean> = {};
   private onAction: (action: PlayerAction) => void;
-  private touch = { left: 0, right: 0, gas: 0, brake: 0, drift: 0, nos: 0 };
-  private pad = { steer: 0, gas: 0, brake: 0, drift: false, nos: false, prev: {} as Record<number, boolean> };
+  private touch = { left: 0, right: 0, gas: 0, brake: 0, drift: 0, nos: 0, fire: 0 };
+  private pad = { steer: 0, gas: 0, brake: 0, drift: false, nos: false, fire: false, prev: {} as Record<number, boolean> };
+
+  readonly mouse = {
+    x: window.innerWidth * 0.5,
+    y: window.innerHeight * 0.42,
+    ndcX: 0,
+    ndcY: 0.16,
+    down: false,
+    moved: false,
+  };
 
   constructor(onAction: (action: PlayerAction) => void) {
     this.onAction = onAction;
@@ -40,6 +49,40 @@ export class PlayerController {
 
     window.addEventListener('blur', () => {
       this.keys = {};
+      this.mouse.down = false;
+    });
+
+    window.addEventListener('pointermove', e => {
+      if (e.pointerType === 'touch') return;
+      const w = Math.max(1, window.innerWidth);
+      const h = Math.max(1, window.innerHeight);
+      this.mouse.x = e.clientX;
+      this.mouse.y = e.clientY;
+      this.mouse.ndcX = (e.clientX / w) * 2 - 1;
+      this.mouse.ndcY = -(e.clientY / h) * 2 + 1;
+      this.mouse.moved = true;
+    });
+
+    window.addEventListener('pointerdown', e => {
+      if (e.pointerType === 'touch' || e.button !== 0) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('button, a, input, select, dialog, .garage-panel, .card, .hud-top-actions, #touch')) {
+        return;
+      }
+      this.mouse.x = e.clientX;
+      this.mouse.y = e.clientY;
+      this.mouse.ndcX = (e.clientX / Math.max(1, window.innerWidth)) * 2 - 1;
+      this.mouse.ndcY = -(e.clientY / Math.max(1, window.innerHeight)) * 2 + 1;
+      this.mouse.moved = true;
+      this.mouse.down = true;
+    });
+
+    window.addEventListener('pointerup', e => {
+      if (e.button === 0) this.mouse.down = false;
+    });
+
+    window.addEventListener('pointercancel', () => {
+      this.mouse.down = false;
     });
 
     const bind = (id: string, key: keyof typeof this.touch) => {
@@ -62,6 +105,7 @@ export class PlayerController {
     bind('tBrake', 'brake');
     bind('tDrift', 'drift');
     bind('tNos', 'nos');
+    bind('tFire', 'fire');
   }
 
   pollPad(): void {
@@ -88,6 +132,7 @@ export class PlayerController {
     s.brake = b(6);
     s.drift = pr(0) || pr(2); // A / X
     s.nos = pr(1) || pr(3) || pr(5); // B / Y / RB
+    s.fire = pr(4) || pr(11); // LB / R3
 
     const padMap: [number, PlayerAction][] = [
       [9, 'pause'],
@@ -128,6 +173,7 @@ export class PlayerController {
     inp.drift = !!(spaceDrift || downAsDrift || t.drift > 0 || p.drift);
     inp.brake = clamp(Math.max(sBrake, downAsReverse ? 1 : 0, t.brake, p.brake), 0, 1);
     inp.nos = !!(k.ShiftLeft || k.ShiftRight || t.nos > 0 || p.nos);
+    inp.fire = !!(this.mouse.down || k.KeyF || k.KeyJ || t.fire > 0 || p.fire);
   }
 }
 

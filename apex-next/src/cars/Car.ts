@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { clamp, damp, lerp, NET_LEAD, ROAD_Y, wrapPi } from '../core/config';
-import { canvasTex } from '../core/textures';
 import { buildCarVisual, type CarVisualRig } from './carModels';
 import { CAR_SPECS, type CarId, type CarSpec } from './carSpecs';
 import type { Track } from '../tracks/Track';
@@ -11,6 +10,7 @@ export interface CarInput {
   steer: number;
   drift: boolean;
   nos: boolean;
+  fire: boolean;
 }
 
 export interface RaceProgress {
@@ -85,8 +85,27 @@ export class Car {
   brakeF: number;
   grip: number;
 
-  input: CarInput = { throttle: 0, brake: 0, steer: 0, drift: false, nos: false };
-  net = { x: 0, z: 0, h: 0, vx: 0, vz: 0, steer: 0, flags: 0, age: 0 };
+  input: CarInput = { throttle: 0, brake: 0, steer: 0, drift: false, nos: false, fire: false };
+  net = { x: 0, z: 0, h: 0, vx: 0, vz: 0, steer: 0, flags: 0, age: 0, hp: 100, yaw: 0, pitch: 0 };
+
+  // Combat & bonnet-mounted turret state
+  hp = 100;
+  maxHp = 100;
+  blasted = false;
+  blastTimer = 0;
+  respawnProtect = 0;
+  sinceHit = 99;
+  takedowns = 0;
+  lastAttackerId: string | null = null;
+  gunYaw = 0;
+  gunPitch = 0.02;
+  targetGunYaw = 0;
+  targetGunPitch = 0.02;
+  gunRecoil = 0;
+  muzzleFlashT = 0;
+  fireCd = 0;
+  aiBurstTimer = 0;
+  aiBurstWait = 0;
 
   pitch = 0;
   roll = 0;
@@ -103,6 +122,9 @@ export class Car {
   skidLast: [THREE.Vector3 | null, THREE.Vector3 | null] = [null, null];
   race: RaceProgress | null = null;
   tagMat: THREE.SpriteMaterial | null = null;
+  tagCanvas: HTMLCanvasElement | null = null;
+  tagCtx: CanvasRenderingContext2D | null = null;
+  lastTagHp = -1;
   rig: CarVisualRig;
   mesh: THREE.Group;
 
@@ -147,29 +169,55 @@ export class Car {
   }
 
   setTag(name: string): void {
-    const tex = canvasTex(
-      256,
-      64,
-      (c, w, h) => {
-        c.font = '700 26px system-ui, -apple-system, sans-serif';
-        const tw = Math.min(w - 8, c.measureText(name).width + 32);
-        c.fillStyle = 'rgba(8,12,20,.72)';
-        c.fillRect((w - tw) / 2, 10, tw, 44);
-        c.fillStyle = this.colorHex;
-        c.fillRect((w - tw) / 2, 50, tw, 4);
-        c.fillStyle = '#ffffff';
-        c.textAlign = 'center';
-        c.textBaseline = 'middle';
-        c.fillText(name, w / 2, h / 2 - 1, w - 20);
-      },
-      false
-    );
+    this.name = name;
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 76;
+    this.tagCanvas = c;
+    this.tagCtx = c.getContext('2d');
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
     this.tagMat = new THREE.SpriteMaterial({ map: tex, depthWrite: false, fog: false });
     const s = new THREE.Sprite(this.tagMat);
-    s.scale.set(3.8, 0.95, 1);
-    s.position.y = 2.45;
+    s.scale.set(3.8, 1.12, 1);
+    s.position.y = 2.48;
     s.renderOrder = 6;
     this.mesh.add(s);
+    this.lastTagHp = -1;
+    this.drawTag();
+  }
+
+  private drawTag(): void {
+    const ctx = this.tagCtx;
+    const c = this.tagCanvas;
+    if (!ctx || !c || !this.tagMat?.map) return;
+    const w = c.width;
+    const h = c.height;
+    const hpQuant = Math.max(0, Math.round(this.hp));
+    if (hpQuant === this.lastTagHp) return;
+    this.lastTagHp = hpQuant;
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.font = '700 25px system-ui, -apple-system, sans-serif';
+    const tw = Math.min(w - 8, Math.max(132, ctx.measureText(this.name).width + 32));
+    const bx = (w - tw) / 2;
+    ctx.fillStyle = 'rgba(8,12,20,.78)';
+    ctx.fillRect(bx, 8, tw, 42);
+    ctx.fillStyle = this.colorHex;
+    ctx.fillRect(bx, 46, tw, 4);
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(this.name, w / 2, 27, w - 20);
+
+    // Health bar underneath name plate
+    const ratio = clamp(this.hp / this.maxHp, 0, 1);
+    ctx.fillStyle = 'rgba(8,12,20,.85)';
+    ctx.fillRect(bx, 54, tw, 12);
+    ctx.fillStyle = ratio > 0.55 ? '#58ff7a' : ratio > 0.28 ? '#ffb347' : '#ff3b4d';
+    ctx.fillRect(bx + 2, 56, Math.max(0, (tw - 4) * ratio), 8);
+
+    this.tagMat.map.needsUpdate = true;
   }
 
   dispose(): void {
@@ -194,12 +242,14 @@ export class Car {
     const S = this.spec;
     this.bovTrigger = false;
 
+    this.stepCombatTimers(dt);
+
     const centering = Math.abs(inp.steer) < 0.05 || inp.steer * this.steer < 0;
     const steerRate = (centering ? 11.2 : 8.2) * clamp(S.driftControl, 0.9, 1.45);
     this.steer += clamp(inp.steer - this.steer, -steerRate * dt, steerRate * dt);
     this.braking = inp.brake > 0.05;
 
-    if (this.frozen) {
+    if (this.frozen || this.blasted) {
       this.vx = this.vz = 0;
       this.speed = 0;
       this.slip = 0;
@@ -236,7 +286,7 @@ export class Car {
       let regen = 2.4;
       if (allCars && vF > 18) {
         for (const other of allCars) {
-          if (other === this) continue;
+          if (other === this || other.blasted) continue;
           const dx = other.x - this.x;
           const dz = other.z - this.z;
           const fwd = dx * sh + dz * ch;
@@ -443,6 +493,23 @@ export class Car {
     this.constrain(track);
   }
 
+  private stepCombatTimers(dt: number): void {
+    this.gunYaw += wrapPi(this.targetGunYaw - this.gunYaw) * (1 - Math.exp(-18 * dt));
+    this.gunPitch = damp(this.gunPitch, this.targetGunPitch, 18, dt);
+    this.gunRecoil = damp(this.gunRecoil, 0, 22, dt);
+    if (this.muzzleFlashT > 0) this.muzzleFlashT = Math.max(0, this.muzzleFlashT - dt);
+    if (this.fireCd > 0) this.fireCd = Math.max(0, this.fireCd - dt);
+    if (this.respawnProtect > 0) this.respawnProtect = Math.max(0, this.respawnProtect - dt);
+    this.sinceHit += dt;
+    if (this.blasted && this.blastTimer > 0) {
+      this.blastTimer = Math.max(0, this.blastTimer - dt);
+    }
+    if (this.isPlayer && !this.blasted && !this.frozen && this.sinceHit > 3.5 && this.hp < this.maxHp) {
+      this.hp = Math.min(this.maxHp, this.hp + 6.5 * dt);
+    }
+    this.drawTag();
+  }
+
   // ----- Multiplayer Packing & Dead-Reckoning -----
   pack(): (string | number)[] {
     const r = this.race!;
@@ -451,7 +518,8 @@ export class Car {
       (this.braking ? 1 : 0) |
       (this.input.drift ? 2 : 0) |
       (this.nosActive ? 4 : 0) |
-      (this.drifting ? 8 : 0);
+      (this.drifting ? 8 : 0) |
+      (this.blasted ? 16 : 0);
     return [
       this.id,
       f(this.x),
@@ -466,6 +534,9 @@ export class Car {
       r.finished && r.finishTime ? r.finishTime : 0,
       r.best || 0,
       r.last || 0,
+      Math.round(this.hp),
+      f(this.gunYaw),
+      f(this.gunPitch),
     ];
   }
 
@@ -479,6 +550,9 @@ export class Car {
     n.z = Number(a[2]) + n.vz * lead;
     n.steer = clamp(Number(a[6]), -1, 1);
     n.flags = Number(a[7]) | 0;
+    n.hp = Number.isFinite(Number(a[13])) ? clamp(Number(a[13]), 0, 100) : n.hp;
+    n.yaw = Number.isFinite(Number(a[14])) ? clamp(Number(a[14]), -3.14, 3.14) : n.yaw;
+    n.pitch = Number.isFinite(Number(a[15])) ? clamp(Number(a[15]), -0.5, 0.8) : n.pitch;
     n.age = 0;
 
     const r = this.race;
@@ -528,6 +602,11 @@ export class Car {
     this.input.drift = !!(n.flags & 2);
     this.nosActive = !!(n.flags & 4);
     this.drifting = !!(n.flags & 8) || (this.slip > 4.2 && Math.abs(this.speed) > 7);
+    this.blasted = !!(n.flags & 16);
+    this.hp = n.hp;
+    this.targetGunYaw = n.yaw;
+    this.targetGunPitch = n.pitch;
+    this.stepCombatTimers(dt);
     this.yawRate = 0;
     this.constrain(track);
     this.hit = 0;
@@ -602,6 +681,8 @@ export class Car {
 
   updateVisual(alpha: number, dt: number, timeSec = 0): void {
     const m = this.mesh;
+    m.visible = !this.blasted;
+    if (this.blasted) return;
     m.position.set(lerp(this.px0, this.x, alpha), lerp(this.py0, this.y, alpha), lerp(this.pz0, this.z, alpha));
     this.renderH = this.ph0 + wrapPi(this.h - this.ph0) * alpha;
     this.pitch = damp(this.pitch, -Math.atan(this.slopeRel), 10, dt);
@@ -642,6 +723,23 @@ export class Car {
     }
     if (this.rig.nosLight) {
       this.rig.nosLight.intensity = showNos ? 4.5 + Math.random() * 2.0 : 0;
+    }
+
+    // Articulated bonnet-mounted gun turret + recoil + muzzle flash
+    if (!this.race) {
+      // Gentle showroom sweep so the turret is unmistakably visible
+      this.gunYaw = Math.sin(timeSec * 0.9) * 0.22;
+      this.gunPitch = 0.05 + Math.sin(timeSec * 1.4) * 0.03;
+    }
+    this.rig.turretYaw.rotation.y = this.gunYaw;
+    this.rig.turretPitch.rotation.x = -this.gunPitch;
+    this.rig.turretRecoil.position.z = -this.gunRecoil;
+    const showFlash = this.muzzleFlashT > 0;
+    this.rig.muzzleFlash.visible = showFlash;
+    if (showFlash) {
+      const fs = 0.8 + Math.random() * 0.5;
+      this.rig.muzzleFlash.scale.set(fs, fs, 0.85 + Math.random() * 0.55);
+      this.rig.muzzleFlash.rotation.z = Math.random() * Math.PI;
     }
   }
 }

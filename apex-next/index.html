@@ -12,6 +12,19 @@
 
   <!-- In-Race HUD -->
   <div id="hud" class="hidden">
+    <div id="crosshair" aria-hidden="true">
+      <svg viewBox="0 0 64 64" width="54" height="54">
+        <g class="reticle-ring">
+          <path d="M20 8 H8 V20 M44 8 H56 V20 M20 56 H8 V44 M44 56 H56 V44" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"/>
+          <circle cx="32" cy="32" r="2.6" fill="currentColor"/>
+          <path d="M18 32 H25 M39 32 H46 M32 18 V25 M32 39 V46" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </g>
+        <g class="hit-x">
+          <path d="M19 19 L26 26 M45 19 L38 26 M19 45 L26 38 M45 45 L38 38" stroke="#ffd54a" stroke-width="3" stroke-linecap="round"/>
+        </g>
+      </svg>
+    </div>
+
     <div class="hud-panel tl">
       <div id="pos"><span id="posNum">1</span><sup id="posSuf">st</sup><span id="posTot">/6</span></div>
       <div id="lap">LAP <b id="lapNum">1</b>/<span id="lapTot">3</span></div>
@@ -23,6 +36,7 @@
       <div class="row"><span>LAP</span><b id="tLap">0:00.000</b></div>
       <div class="row"><span>LAST</span><b id="tLast">--:--.---</b></div>
       <div class="row best"><span>BEST</span><b id="tBest">--:--.---</b></div>
+      <div class="row blasts"><span>BLASTS</span><b id="hudBlasts">0</b></div>
     </div>
 
     <div id="driftBadge" aria-live="polite">
@@ -34,6 +48,15 @@
     <canvas id="minimap" width="180" height="180" aria-label="Track minimap"></canvas>
 
     <div class="hud-bottom-right">
+      <div id="hpWrap">
+        <div class="hp-header">
+          <span id="hpTag">ARMOR</span>
+          <b id="hpPct">100%</b>
+        </div>
+        <div class="hp-track">
+          <div id="hpFill"></div>
+        </div>
+      </div>
       <div id="nosWrap">
         <div class="nos-header">
           <span id="nosTag">NOS READY [SHIFT]</span>
@@ -50,7 +73,7 @@
     <div id="wrongway" class="hidden">WRONG WAY</div>
     <div id="toast" role="status" aria-live="polite"></div>
     <div id="help">
-      W / ↑ Gas · S Reverse · A / D Steer · <b>SPACE / ↓ Drift</b> · <b>SHIFT NOS</b> · C Cam · R Reset · P Pause
+      W / ↑ Gas · S Reverse · A / D Steer · <b>SPACE / ↓ Drift</b> · <b>SHIFT NOS</b> · <b>Mouse Aim · L-Click / F Gun</b> · C Cam · R Reset · P Pause
     </div>
   </div>
 
@@ -62,6 +85,7 @@
     <button type="button" class="tbtn" id="tGas" aria-label="Accelerate">▲</button>
     <button type="button" class="tbtn" id="tDrift">DRIFT</button>
     <button type="button" class="tbtn" id="tNos">NOS</button>
+    <button type="button" class="tbtn" id="tFire">FIRE</button>
   </div>
 
   <div id="hudTopActions" class="hud-top-actions hidden">
@@ -160,7 +184,7 @@
     </section>
 
     <div class="showroom-hint" aria-hidden="true">
-      <span>Drag to orbit 3D car · Drift: <b>SPACE / ↓</b> · NOS: <b>SHIFT</b></span>
+      <span>Drag to orbit 3D car · Drift: <b>SPACE / ↓</b> · NOS: <b>SHIFT</b> · Bonnet Gun: <b>Mouse + Click</b></span>
     </div>
   </main>
 
@@ -213,6 +237,7 @@
         <div class="stat"><span>TOTAL TIME</span><b id="finTime"></b></div>
         <div class="stat"><span>BEST LAP</span><b id="finBest"></b></div>
         <div class="stat"><span>DRIFT SCORE</span><b id="finDrift"></b></div>
+        <div class="stat"><span>CARS BLASTED</span><b id="finBlasts"></b></div>
       </div>
       <div id="finRecord" class="hidden">★ NEW TRACK RECORD ★</div>
       <div class="plist" id="results"></div>
@@ -262,6 +287,8 @@
       <dt>Steer</dt><dd>A / D or ← / → (Stick)</dd>
       <dt>Drift (Charges NOS)</dt><dd>SPACE or ↓ at speed (A / X)</dd>
       <dt>NOS Boost</dt><dd>SHIFT (B / Y / RB)</dd>
+      <dt>Aim Bonnet Gun</dt><dd>Mouse Cursor</dd>
+      <dt>Fire Bonnet Gun</dt><dd>Left Click or F (LB)</dd>
       <dt>Camera View</dt><dd>C</dd>
       <dt>Reset to Track</dt><dd>R</dd>
       <dt>Mute / Pause</dt><dd>M / P or Esc</dd>
