@@ -19,23 +19,23 @@ export function canvasTex(
   return t;
 }
 
-export function makeAsphaltTexture(nightWet: boolean, expressway = false): {
+export function makeAsphaltTexture(nightWet: boolean, expressway = false, deathrace = false): {
   map: THREE.CanvasTexture;
   roughnessMap: THREE.CanvasTexture;
   normalMap: THREE.CanvasTexture;
 } {
   const map = canvasTex(512, 512, (c, w, h) => {
-    c.fillStyle = nightWet ? '#171b24' : expressway ? '#2a2e36' : '#262930';
+    c.fillStyle = deathrace ? '#1c1815' : nightWet ? '#171b24' : expressway ? '#2a2e36' : '#262930';
     c.fillRect(0, 0, w, h);
 
     // Multi-scale mineral aggregate grain
     for (let i = 0; i < 18000; i++) {
-      const s = nightWet ? 16 + Math.random() * 28 : 26 + Math.random() * 42;
+      const s = nightWet ? 16 + Math.random() * 28 : deathrace ? 18 + Math.random() * 32 : 26 + Math.random() * 42;
       c.fillStyle = `rgba(${s | 0},${(s + 2) | 0},${(s + 5) | 0},0.34)`;
       c.fillRect(Math.random() * w, Math.random() * h, 2, 2);
     }
     for (let i = 0; i < 4500; i++) {
-      const s = nightWet ? 38 + Math.random() * 25 : 58 + Math.random() * 36;
+      const s = nightWet ? 38 + Math.random() * 25 : deathrace ? 32 + Math.random() * 28 : 58 + Math.random() * 36;
       c.fillStyle = `rgba(${s | 0},${s | 0},${(s + 3) | 0},0.20)`;
       c.fillRect(Math.random() * w, Math.random() * h, 1, 1);
     }
@@ -55,7 +55,35 @@ export function makeAsphaltTexture(nightWet: boolean, expressway = false): {
     c.fillStyle = grooveR;
     c.fillRect(w * 0.64, 0, w * 0.22, h);
 
-    if (expressway) {
+    if (deathrace) {
+      // Scorched Death Race battle strip markings:
+      // Red hazard edge borders with yellow warning notches
+      c.fillStyle = '#cc2000';
+      c.fillRect(10, 0, 8, h);
+      c.fillRect(w - 18, 0, 8, h);
+
+      c.fillStyle = '#ff9900';
+      for (let y = 0; y < h; y += 48) {
+        c.fillRect(18, y, 6, 24);
+        c.fillRect(w - 24, y, 6, 24);
+      }
+
+      // 4 combat lanes dividers (two dashed red lanes)
+      c.fillStyle = 'rgba(255, 50, 20, 0.85)';
+      c.fillRect(w * 0.28 - 2, 0, 4, h * 0.44);
+      c.fillRect(w * 0.72 - 2, 0, 4, h * 0.44);
+
+      // Heavy center dashed yellow war line
+      c.fillStyle = '#ffcc00';
+      c.fillRect(w / 2 - 3.5, 0, 7, h * 0.52);
+
+      // Heavy burnout skid marks & battle blast scorches
+      c.fillStyle = 'rgba(12, 10, 8, 0.45)';
+      c.beginPath();
+      c.ellipse(w * 0.38, h * 0.35, 34, 12, 0.15, 0, Math.PI * 2);
+      c.ellipse(w * 0.62, h * 0.75, 42, 14, -0.2, 0, Math.PI * 2);
+      c.fill();
+    } else if (expressway) {
       // Sri Lanka E03 4-lane expressway markings: yellow shoulder lines + twin white dashed lane dividers + center double line
       c.fillStyle = '#f5b82e';
       c.fillRect(10, 0, 6, h);
@@ -606,6 +634,66 @@ export function makeHighwaySignTexture(routeBadge: string, headline: string, sub
       c.fillText(subline, 238, 156);
     },
     false
+  );
+}
+
+export function makeDeathRaceSignTexture(headline: string, subline: string): THREE.CanvasTexture {
+  return canvasTex(
+    1024,
+    256,
+    (c, w, h) => {
+      // Dark weathered armor steel plate
+      c.fillStyle = '#141210';
+      c.fillRect(0, 0, w, h);
+
+      // Angled yellow/black hazard caution chevrons on top and bottom borders
+      const drawHazards = (y: number, barH: number) => {
+        c.fillStyle = '#ffaa00';
+        c.fillRect(0, y, w, barH);
+        c.fillStyle = '#11100e';
+        const step = 36;
+        for (let x = -step; x < w + step; x += step) {
+          c.beginPath();
+          c.moveTo(x, y);
+          c.lineTo(x + 20, y);
+          c.lineTo(x + 36, y + barH);
+          c.lineTo(x + 16, y + barH);
+          c.closePath();
+          c.fill();
+        }
+      };
+      drawHazards(0, 28);
+      drawHazards(h - 28, 28);
+
+      // Glowing crimson inner frame
+      c.strokeStyle = '#ff2b00';
+      c.lineWidth = 6;
+      c.strokeRect(16, 36, w - 32, h - 72);
+
+      // Flashing alert icons
+      c.fillStyle = '#ff2200';
+      c.beginPath();
+      c.arc(55, h / 2, 22, 0, Math.PI * 2);
+      c.arc(w - 55, h / 2, 22, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = '#ffffff';
+      c.font = '900 24px system-ui, sans-serif';
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.fillText('!', 55, h / 2);
+      c.fillText('!', w - 55, h / 2);
+
+      // Headline (Glowing Red Stencil)
+      c.font = 'italic 900 58px system-ui, sans-serif';
+      c.fillStyle = '#ff3300';
+      c.fillText(headline, w / 2, h / 2 - 18);
+
+      // Subline (Bright Amber)
+      c.font = '800 28px system-ui, sans-serif';
+      c.fillStyle = '#ffb300';
+      c.fillText(subline, w / 2, h / 2 + 30);
+    },
+    true
   );
 }
 

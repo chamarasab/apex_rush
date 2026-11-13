@@ -7,6 +7,7 @@ import {
   makeBuildingWindowTexture,
   makeChevronTexture,
   makeCurbTexture,
+  makeDeathRaceSignTexture,
   makeGroundTexture,
   makeHighwaySignTexture,
   makeOffroadSurfaceTexture,
@@ -311,9 +312,10 @@ export class Track {
     const th = this.theme;
     const isOffroad = th.sceneryStyle === 'offroad';
     const isExpressway = th.sceneryStyle === 'expressway';
+    const isDeathRace = th.sceneryStyle === 'deathrace';
 
-    // 1. Road Surface (Asphalt, E03 Divided Highway, or Offroad Sand / Mud / Riverbed)
-    const surfTex = isOffroad ? makeOffroadSurfaceTexture() : makeAsphaltTexture(th.wetRoad, isExpressway);
+    // 1. Road Surface (Asphalt, E03 Divided Highway, Offroad Sand / Mud, or Death Race Scorched Asphalt)
+    const surfTex = isOffroad ? makeOffroadSurfaceTexture() : makeAsphaltTexture(th.wetRoad, isExpressway, isDeathRace);
     this.disposables.push(surfTex.map, surfTex.roughnessMap, surfTex.normalMap);
     const vLen = this.length / Math.round(this.length / (isExpressway ? 16 : 12));
 
@@ -968,6 +970,176 @@ export class Track {
 
       airport.position.set(40, 2.08, -1320);
       this.group.add(airport);
+    }
+
+    // Death Race: Overhead Battle Gantries, Flaming Gas Stacks, Industrial Watchtowers & Shipping Container Colosseum
+    if (th.sceneryStyle === 'deathrace') {
+      const steelMat = new THREE.MeshStandardMaterial({ color: 0x241d18, metalness: 0.82, roughness: 0.35 });
+      const rustSteelMat = new THREE.MeshStandardMaterial({ color: 0x4d3222, metalness: 0.65, roughness: 0.55 });
+      const glowRedMat = new THREE.MeshBasicMaterial({ color: 0xff2200 });
+      const flameMat = new THREE.MeshBasicMaterial({
+        color: 0xff5500,
+        transparent: true,
+        opacity: 0.92,
+        blending: THREE.AdditiveBlending,
+        toneMapped: false,
+      });
+      this.disposables.push(steelMat, rustSteelMat, glowRedMat, flameMat);
+
+      // 1. Overhead Spiked Battle Gantries across the track with LED Warning Boards
+      const gantryPillarGeo = new THREE.BoxGeometry(0.9, 11.5, 0.9);
+      const gantryTrussGeo = new THREE.BoxGeometry((this.roadHalf + 3.2) * 2 + 1.8, 1.2, 1.0);
+      const spikeGeo = new THREE.ConeGeometry(0.22, 1.4, 4);
+      const gantryBoardGeo = new THREE.PlaneGeometry(21.0, 4.2);
+      this.disposables.push(gantryPillarGeo, gantryTrussGeo, spikeGeo, gantryBoardGeo);
+
+      const combatGantries: [number, string, string][] = [
+        [0.06, 'KILL ZONE · WEAPONS FREE', 'THE GAUNTLET · MAX SPEED ENGAGEMENT'],
+        [0.48, 'MAXIMUM COMBAT · NO PRISONERS', 'ROCKET ALLEY · HIGHWAY TO HELL'],
+        [0.82, 'DEATH RACE · OBLITERATE OR DIE', 'FINAL SECTOR · LOCK & DESTROY'],
+      ];
+
+      for (const [frac, head, sub] of combatGantries) {
+        const i = Math.floor(frac * this.N);
+        const bg = new THREE.Group();
+
+        // Heavy twin side pillars with hazard warning beacons
+        for (const sx of [1, -1]) {
+          const pCol = new THREE.Mesh(gantryPillarGeo, rustSteelMat);
+          pCol.position.set(sx * (this.roadHalf + 3.2), 5.75, 0);
+          pCol.castShadow = true;
+          bg.add(pCol);
+
+          const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), glowRedMat);
+          beacon.position.set(sx * (this.roadHalf + 3.2), 12.0, 0);
+          bg.add(beacon);
+        }
+
+        // Heavy overhead steel cross truss
+        const truss = new THREE.Mesh(gantryTrussGeo, steelMat);
+        truss.position.y = 11.2;
+        truss.castShadow = true;
+        bg.add(truss);
+
+        // Spikes across the gantry top
+        for (let sp = -this.roadHalf; sp <= this.roadHalf; sp += 2.2) {
+          const spike = new THREE.Mesh(spikeGeo, steelMat);
+          spike.position.set(sp, 12.4, 0);
+          bg.add(spike);
+        }
+
+        // Warning sign board facing forward & backward
+        const sTex = makeDeathRaceSignTexture(head, sub);
+        const sMat = new THREE.MeshBasicMaterial({ map: sTex });
+        this.disposables.push(sTex, sMat);
+        const fBoard = new THREE.Mesh(gantryBoardGeo, sMat);
+        fBoard.position.set(0, 9.8, 0.55);
+        const bBoard = new THREE.Mesh(gantryBoardGeo, sMat);
+        bBoard.position.set(0, 9.8, -0.55);
+        bBoard.rotation.y = Math.PI;
+        bg.add(fBoard, bBoard);
+
+        bg.position.set(this.px[i], this.py[i], this.pz[i]);
+        bg.rotation.y = this.head[i];
+        this.group.add(bg);
+      }
+
+      // 2. Flaming Gas Stacks / Industrial Burners along the verges
+      const pipeGeo = new THREE.CylinderGeometry(0.24, 0.28, 4.2, 8);
+      const flameGeo = new THREE.ConeGeometry(0.55, 2.8, 8);
+      this.disposables.push(pipeGeo, flameGeo);
+
+      for (let k = 0; k < 18; k++) {
+        const i = Math.floor((k / 18) * this.N);
+        const side = k % 2 === 0 ? 1 : -1;
+        const off = side * (this.barrierOff + 2.4);
+
+        const burner = new THREE.Group();
+        const pipe = new THREE.Mesh(pipeGeo, rustSteelMat);
+        pipe.position.y = 2.1;
+        pipe.castShadow = true;
+
+        const flame = new THREE.Mesh(flameGeo, flameMat);
+        flame.position.y = 5.2;
+
+        burner.add(pipe, flame);
+        burner.position.set(this.px[i] + this.lx[i] * off, this.py[i], this.pz[i] + this.lz[i] * off);
+        burner.rotation.y = this.head[i];
+        this.group.add(burner);
+      }
+
+      // 3. Industrial Watchtowers with Searchlights
+      const towerLegGeo = new THREE.BoxGeometry(0.35, 14, 0.35);
+      const platformGeo = new THREE.BoxGeometry(4.2, 0.4, 4.2);
+      const roofGeo = new THREE.ConeGeometry(3.2, 1.4, 4);
+      const spotLightConeGeo = new THREE.CylinderGeometry(0.2, 3.8, 14, 8, 1, true);
+      const beamMat = new THREE.MeshBasicMaterial({
+        color: 0xffeedd,
+        transparent: true,
+        opacity: 0.18,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      this.disposables.push(towerLegGeo, platformGeo, roofGeo, spotLightConeGeo, beamMat);
+
+      for (let k = 0; k < 8; k++) {
+        const i = Math.floor(((k + 0.5) / 8) * this.N);
+        const side = k % 2 === 0 ? 1 : -1;
+        const off = side * (this.barrierOff + 10.5);
+
+        const wt = new THREE.Group();
+        for (const dx of [-1.5, 1.5]) {
+          for (const dz of [-1.5, 1.5]) {
+            const leg = new THREE.Mesh(towerLegGeo, steelMat);
+            leg.position.set(dx, 7, dz);
+            wt.add(leg);
+          }
+        }
+        const plat = new THREE.Mesh(platformGeo, rustSteelMat);
+        plat.position.y = 14;
+        const rf = new THREE.Mesh(roofGeo, rustSteelMat);
+        rf.position.y = 16.8;
+        rf.rotation.y = Math.PI / 4;
+
+        // Angled searchlight beam pointing toward track
+        const beam = new THREE.Mesh(spotLightConeGeo, beamMat);
+        beam.position.set(-side * 2.5, 7, 0);
+        beam.rotation.z = side * 0.42;
+
+        wt.add(plat, rf, beam);
+        wt.position.set(this.px[i] + this.lx[i] * off, this.py[i], this.pz[i] + this.lz[i] * off);
+        wt.rotation.y = this.head[i];
+        this.group.add(wt);
+      }
+
+      // 4. Arena Colosseum Perimeter: Stacked Shipping Containers
+      const cBoxGeo = new THREE.BoxGeometry(6.2, 2.6, 2.4);
+      const cColors = [0x8c2818, 0x1f4268, 0xb8860b, 0x3d423b, 0xa0421e];
+      const cMats = cColors.map(
+        c => new THREE.MeshStandardMaterial({ color: c, metalness: 0.65, roughness: 0.45 })
+      );
+      this.disposables.push(cBoxGeo, ...cMats);
+
+      for (let k = 0; k < 28; k++) {
+        const i = Math.floor((k / 28) * this.N);
+        const side = (k % 2 === 0) ? 1 : -1;
+        const off = side * (this.barrierOff + 7.5);
+        const cg = new THREE.Group();
+
+        const tiers = 2 + (k % 2);
+        for (let t = 0; t < tiers; t++) {
+          const mat = cMats[(k * 3 + t) % cMats.length];
+          const box = new THREE.Mesh(cBoxGeo, mat);
+          box.position.set((k % 3 - 1) * 0.2, 1.3 + t * 2.6, (t === 1 ? 0.3 : 0));
+          box.castShadow = true;
+          cg.add(box);
+        }
+
+        cg.position.set(this.px[i] + this.lx[i] * off, this.py[i], this.pz[i] + this.lz[i] * off);
+        cg.rotation.y = this.head[i] + (k % 5 - 2) * 0.04;
+        this.group.add(cg);
+      }
     }
   }
 

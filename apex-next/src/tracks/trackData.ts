@@ -1,4 +1,4 @@
-export type TrackId = 'tokyo' | 'canyon' | 'alpine' | 'harbor' | 'offroad' | 'katunayake';
+export type TrackId = 'tokyo' | 'canyon' | 'alpine' | 'harbor' | 'offroad' | 'katunayake' | 'deathrace';
 
 export interface TrackTheme {
   id: TrackId;
@@ -26,7 +26,7 @@ export interface TrackTheme {
   groundDark: string;
   groundLight: string;
   terrainHillHeight: number;
-  sceneryStyle: 'city' | 'canyon' | 'alpine' | 'harbor' | 'offroad' | 'expressway';
+  sceneryStyle: 'city' | 'canyon' | 'alpine' | 'harbor' | 'offroad' | 'expressway' | 'deathrace';
   roadHalf: number;
   verge: number;
   open?: boolean;
@@ -328,7 +328,62 @@ export const TRACKS: Record<TrackId, TrackTheme> = {
       [-12, 3.2, -1125],
     ],
   },
+  deathrace: {
+    id: 'deathrace',
+    name: 'Death Highway',
+    subtitle: 'Wasteland Arena & High-Speed Combat Strip',
+    badge: 'DEATH RACE · COMBAT',
+    night: false,
+    wetRoad: false,
+    skyHorizon: 0xd94414,
+    skyZenith: 0x1f0b08,
+    fogColor: 0xad3712,
+    fogNear: 190,
+    fogFar: 1300,
+    hemiSky: 0xff6633,
+    hemiGround: 0x38140a,
+    hemiIntensity: 1.65,
+    sunColor: 0xff6b26,
+    sunIntensity: 3.5,
+    sunDir: [110, 85, -80],
+    sunDiscColor: 0xffad5c,
+    accentHex: '#ff2e00',
+    curbColors: ['#d92600', '#1c1816'],
+    barrierColors: [0x422f25, 0x614436],
+    groundBase: '#2e2019',
+    groundDark: 'rgba(22,12,8,0.55)',
+    groundLight: 'rgba(96,52,30,0.32)',
+    terrainHillHeight: 38,
+    sceneryStyle: 'deathrace',
+    roadHalf: 11.2,
+    verge: 5.4,
+    // Ultra-smooth, high-speed combat arena circuit:
+    // Two 550m straightaways ("The Gauntlet" & "Hell's Highway") connected by gentle banked sweepers.
+    // Wide lanes (11.2m half-width) allow continuous firing and missile duels with zero wall frustration.
+    points: [
+      [-160, 0, 220],
+      [0, 0, 220],
+      [160, 0.4, 220],
+      [270, 0.8, 215],
+      [365, 1.6, 170],
+      [425, 2.6, 85],
+      [435, 3.0, 0],
+      [425, 2.6, -85],
+      [365, 2.0, -170],
+      [270, 1.6, -215],
+      [160, 1.8, -220],
+      [0, 2.0, -220],
+      [-160, 1.8, -220],
+      [-270, 1.5, -215],
+      [-365, 1.2, -170],
+      [-425, 0.8, -85],
+      [-435, 0.4, 0],
+      [-425, 0.2, 85],
+      [-365, 0.1, 170],
+      [-270, 0, 215],
+    ],
+  },
 };
 
-export const TRACK_IDS: TrackId[] = ['tokyo', 'canyon', 'alpine', 'harbor', 'offroad', 'katunayake'];
+export const TRACK_IDS: TrackId[] = ['tokyo', 'canyon', 'alpine', 'harbor', 'offroad', 'katunayake', 'deathrace'];
 

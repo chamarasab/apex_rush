@@ -240,6 +240,11 @@ export class Scenery {
         col[i * 3] = 0.95 + 0.22 * n + hi * 0.2;
         col[i * 3 + 1] = 0.78 + 0.15 * n - hi * 0.08;
         col[i * 3 + 2] = 0.65 + 0.1 * n - hi * 0.12;
+      } else if (style === 'deathrace') {
+        // Scorched cratered wasteland: dark burnt basalt -> scorched red-brown iron oxide dirt
+        col[i * 3] = 0.52 + 0.16 * n + hi * 0.14;
+        col[i * 3 + 1] = 0.24 + 0.08 * n;
+        col[i * 3 + 2] = 0.15 + 0.05 * n - hi * 0.04;
       } else if (style === 'city') {
         col[i * 3] = 0.72 + 0.15 * n;
         col[i * 3 + 1] = 0.75 + 0.15 * n;
@@ -350,7 +355,7 @@ export class Scenery {
       spots.push([x, h - 0.3, z, 0.78 + rnd() * 1.0, rnd() * 6.28, rnd()]);
     };
 
-    const roadTreeProb = style === 'city' ? 0.35 : style === 'offroad' ? 0.25 : 0.72;
+    const roadTreeProb = style === 'city' ? 0.35 : style === 'offroad' ? 0.25 : style === 'deathrace' ? 0.20 : 0.72;
     for (let i = 0; i < t.N; i += 6) {
       for (const s of [-1, 1]) {
         if (rnd() < roadTreeProb) {
@@ -359,7 +364,7 @@ export class Scenery {
         }
       }
     }
-    const scatterCount = style === 'city' ? 180 : style === 'offroad' ? 160 : style === 'expressway' ? 560 : 420;
+    const scatterCount = style === 'city' ? 180 : style === 'offroad' ? 160 : style === 'expressway' ? 560 : style === 'deathrace' ? 140 : 420;
     const scatterSpan = this.mapSize * 0.72;
     for (let k = 0; k < scatterCount; k++) {
       tryAdd(this.cx + (rnd() - 0.5) * scatterSpan, this.cz + (rnd() - 0.5) * scatterSpan);
@@ -405,6 +410,7 @@ export class Scenery {
         if (sp[1] < 2.0) col.setHSL(0.28 + sp[5] * 0.05, 0.44, 0.24 + sp[5] * 0.08);
         else col.setHSL(0.21 + sp[5] * 0.05, 0.28, 0.26 + sp[5] * 0.08);
       } else if (style === 'expressway') col.setHSL(0.29 + sp[5] * 0.06, 0.52, 0.21 + sp[5] * 0.09);
+      else if (style === 'deathrace') col.setHSL(0.06 + sp[5] * 0.04, 0.45, 0.12 + sp[5] * 0.06);
       else if (style === 'canyon') col.setHSL(0.22 + sp[5] * 0.06, 0.32, 0.22 + sp[5] * 0.08);
       else if (style === 'city') col.setHSL(0.32 + sp[5] * 0.06, 0.28, 0.14 + sp[5] * 0.06);
       else col.setHSL(0.29 + sp[5] * 0.07, 0.36, 0.20 + sp[5] * 0.09);
@@ -422,24 +428,26 @@ export class Scenery {
       this.group.add(im);
     });
 
-    // Canyon & offroad desert sandstone rocks
-    if (style === 'canyon' || style === 'offroad') {
+    // Canyon, offroad & deathrace desert sandstone / basalt rocks
+    if (style === 'canyon' || style === 'offroad' || style === 'deathrace') {
       const isOffroad = style === 'offroad';
+      const isDeathRace = style === 'deathrace';
       const rockGeo = new THREE.DodecahedronGeometry(1, isOffroad ? 1 : 0);
       const rockMat = new THREE.MeshStandardMaterial({
-        color: isOffroad ? 0xb5895a : 0xa85534,
+        color: isDeathRace ? 0x241d1a : isOffroad ? 0xb5895a : 0xa85534,
         roughness: 0.94,
+        metalness: isDeathRace ? 0.28 : 0.0,
       });
       this.disposables.push(rockGeo, rockMat);
       const rocks: [number, number, number, number][] = [];
-      const count = isOffroad ? 85 : 55;
+      const count = isDeathRace ? 110 : isOffroad ? 85 : 55;
       for (let k = 0; k < count; k++) {
-        const x = this.cx + (rnd() - 0.5) * 1300;
-        const z = this.cz + (rnd() - 0.5) * 1300;
-        if (t.nearestInfo(x, z, tmp).d < (isOffroad ? t.barrierOff + 8 : 42)) continue;
+        const x = this.cx + (rnd() - 0.5) * 1400;
+        const z = this.cz + (rnd() - 0.5) * 1400;
+        if (t.nearestInfo(x, z, tmp).d < (isDeathRace ? t.barrierOff + 10 : isOffroad ? t.barrierOff + 8 : 42)) continue;
         const ry = t.terrainHeight(x, z);
         if (isOffroad && ry < 0.25) continue;
-        rocks.push([x, ry, z, isOffroad ? 2.8 + rnd() * 7.5 : 8 + rnd() * 18]);
+        rocks.push([x, ry, z, isDeathRace ? 3.5 + rnd() * 12 : isOffroad ? 2.8 + rnd() * 7.5 : 8 + rnd() * 18]);
       }
       if (rocks.length) {
         const rockIm = new THREE.InstancedMesh(rockGeo, rockMat, rocks.length);
