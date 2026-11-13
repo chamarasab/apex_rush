@@ -329,6 +329,44 @@ export class AudioManager {
     n.stop(t + 0.08);
   }
 
+  playRocketLaunch(isPlayer = false): void {
+    if (!this.ctx || this.muted) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const gainScale = isPlayer ? 1.0 : 0.65;
+
+    // Deep ignition thump: 190Hz -> 48Hz
+    const o = ctx.createOscillator();
+    const og = ctx.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(190, t);
+    o.frequency.exponentialRampToValueAtTime(48, t + 0.22);
+    og.gain.setValueAtTime(0.42 * gainScale, t);
+    og.gain.exponentialRampToValueAtTime(0.001, t + 0.26);
+    o.connect(og);
+    og.connect(this.master);
+    o.start(t);
+    o.stop(t + 0.28);
+
+    // Roaring booster thruster whoosh: swept bandpass noise
+    const n = ctx.createBufferSource();
+    n.buffer = this.noise;
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.setValueAtTime(750, t);
+    f.frequency.exponentialRampToValueAtTime(2600, t + 0.16);
+    f.frequency.exponentialRampToValueAtTime(480, t + 0.44);
+    f.Q.value = 1.4;
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.38 * gainScale, t);
+    ng.gain.exponentialRampToValueAtTime(0.001, t + 0.46);
+    n.connect(f);
+    f.connect(ng);
+    ng.connect(this.master);
+    n.start(t, Math.random());
+    n.stop(t + 0.48);
+  }
+
   playHitMarker(): void {
     if (!this.ctx || this.muted) return;
     const ctx = this.ctx;

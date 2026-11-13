@@ -18,6 +18,23 @@ interface Bolt {
   mesh: THREE.Mesh;
 }
 
+interface Rocket {
+  active: boolean;
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+  speed: number;
+  life: number;
+  ownerId: string;
+  isPlayer: boolean;
+  targetCar: Car | null;
+  targetWorld: THREE.Vector3;
+  mesh: THREE.Group;
+}
+
 interface BlastEffect {
   active: boolean;
   age: number;
@@ -28,12 +45,14 @@ interface BlastEffect {
 
 export interface CombatEvents {
   onFire: (car: Car) => void;
+  onFireRocket?: (car: Car) => void;
   onHit: (victim: Car, shooter: Car | null, damage: number) => void;
-  onBlast: (victim: Car, shooter: Car | null) => void;
+  onBlast: (victim: Car, shooter: Car | null, isRocket?: boolean) => void;
 }
 
-const BOLT_POOL_SIZE = 72;
-const BLAST_POOL_SIZE = 14;
+const BOLT_POOL_SIZE = 96;
+const ROCKET_POOL_SIZE = 16;
+const BLAST_POOL_SIZE = 18;
 const PLAYER_BOLT_DAMAGE = 24;
 const AI_BOLT_DAMAGE = 8;
 
@@ -69,11 +88,19 @@ function distSqPointToSegment(
 export class WeaponSystem {
   private readonly scene: THREE.Scene;
   private readonly bolts: Bolt[] = [];
+  private readonly rockets: Rocket[] = [];
   private readonly blasts: BlastEffect[] = [];
 
   private boltGeo: THREE.BufferGeometry;
   private playerBoltMat: THREE.MeshBasicMaterial;
   private aiBoltMat: THREE.MeshBasicMaterial;
+  private rocketBodyGeo: THREE.BufferGeometry;
+  private rocketConeGeo: THREE.BufferGeometry;
+  private rocketFinGeo: THREE.BufferGeometry;
+  private rocketFlameGeo: THREE.BufferGeometry;
+  private rocketMat: THREE.MeshStandardMaterial;
+  private rocketWarheadMat: THREE.MeshStandardMaterial;
+  private rocketFlameMat: THREE.MeshBasicMaterial;
   private blastCoreGeo: THREE.BufferGeometry;
   private blastRingGeo: THREE.BufferGeometry;
 
@@ -81,6 +108,8 @@ export class WeaponSystem {
   private ndc = new THREE.Vector2();
   private _muzzlePos = new THREE.Vector3();
   private _muzzleTipLocal = new THREE.Vector3(0, 0.004, 1.67);
+  private _rocketMuzzlePos = new THREE.Vector3();
+  private _rocketTipLocal = new THREE.Vector3(0, 0.06, 1.38);
   private _fwdTarget = new THREE.Vector3();
   private _dir = new THREE.Vector3();
   private _localAim = new THREE.Vector3();
@@ -133,6 +162,73 @@ export class WeaponSystem {
       });
     }
 
+    // High-explosive Dicky/Spoiler Rocket projectile mesh parts
+    this.rocketBodyGeo = new THREE.CylinderGeometry(0.082, 0.082, 0.92, 8);
+    this.rocketBodyGeo.rotateX(Math.PI / 2);
+    this.rocketConeGeo = new THREE.ConeGeometry(0.082, 0.28, 8);
+    this.rocketConeGeo.rotateX(Math.PI / 2);
+    this.rocketFinGeo = new THREE.BoxGeometry(0.32, 0.015, 0.16);
+    this.rocketFlameGeo = new THREE.ConeGeometry(0.065, 0.28, 6);
+    this.rocketFlameGeo.rotateX(-Math.PI / 2);
+
+    this.rocketMat = new THREE.MeshStandardMaterial({
+      color: 0x242830,
+      metalness: 0.8,
+      roughness: 0.3,
+    });
+    this.rocketWarheadMat = new THREE.MeshStandardMaterial({
+      color: 0xff1e00,
+      emissive: new THREE.Color(0xd62800),
+      emissiveIntensity: 0.45,
+      metalness: 0.4,
+      roughness: 0.25,
+    });
+    this.rocketFlameMat = new THREE.MeshBasicMaterial({
+      color: 0xffaa00,
+      transparent: true,
+      opacity: 0.92,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    });
+
+    for (let i = 0; i < ROCKET_POOL_SIZE; i++) {
+      const group = new THREE.Group();
+      const body = new THREE.Mesh(this.rocketBodyGeo, this.rocketMat);
+      body.castShadow = true;
+      const nose = new THREE.Mesh(this.rocketConeGeo, this.rocketWarheadMat);
+      nose.position.z = 0.58;
+      const finH = new THREE.Mesh(this.rocketFinGeo, this.rocketMat);
+      finH.position.z = -0.36;
+      const finV = new THREE.Mesh(this.rocketFinGeo, this.rocketMat);
+      finV.position.z = -0.36;
+      finV.rotation.z = Math.PI / 2;
+      const flame = new THREE.Mesh(this.rocketFlameGeo, this.rocketFlameMat);
+      flame.position.z = -0.58;
+
+      group.add(body, nose, finH, finV, flame);
+      group.visible = false;
+      group.frustumCulled = false;
+      scene.add(group);
+
+      this.rockets.push({
+        active: false,
+        x: 0,
+        y: 0,
+        z: 0,
+        vx: 0,
+        vy: 0,
+        vz: 0,
+        speed: 0,
+        life: 0,
+        ownerId: '',
+        isPlayer: false,
+        targetCar: null,
+        targetWorld: new THREE.Vector3(),
+        mesh: group,
+      });
+    }
+
     this.blastCoreGeo = new THREE.SphereGeometry(1, 14, 12);
     this.blastRingGeo = new THREE.RingGeometry(0.7, 1.0, 24);
     this.blastRingGeo.rotateX(-Math.PI / 2);
@@ -169,6 +265,10 @@ export class WeaponSystem {
       b.active = false;
       b.mesh.visible = false;
     }
+    for (const r of this.rockets) {
+      r.active = false;
+      r.mesh.visible = false;
+    }
     for (const ex of this.blasts) {
       ex.active = false;
       ex.core.visible = false;
@@ -178,6 +278,7 @@ export class WeaponSystem {
 
   dispose(): void {
     for (const b of this.bolts) this.scene.remove(b.mesh);
+    for (const r of this.rockets) this.scene.remove(r.mesh);
     for (const ex of this.blasts) {
       this.scene.remove(ex.core, ex.ring);
       (ex.core.material as THREE.Material).dispose();
@@ -186,6 +287,13 @@ export class WeaponSystem {
     this.boltGeo.dispose();
     this.playerBoltMat.dispose();
     this.aiBoltMat.dispose();
+    this.rocketBodyGeo.dispose();
+    this.rocketConeGeo.dispose();
+    this.rocketFinGeo.dispose();
+    this.rocketFlameGeo.dispose();
+    this.rocketMat.dispose();
+    this.rocketWarheadMat.dispose();
+    this.rocketFlameMat.dispose();
     this.blastCoreGeo.dispose();
     this.blastRingGeo.dispose();
   }
@@ -306,43 +414,49 @@ export class WeaponSystem {
   }
 
   private fireFromCar(car: Car, targetWorld: THREE.Vector3 | null, ev: CombatEvents): void {
-    const slot = this.bolts.find(b => !b.active);
-    if (!slot) return;
+    const muzzles = car.rig.isTwin && car.rig.muzzlePoint2
+      ? [car.rig.muzzlePoint, car.rig.muzzlePoint2]
+      : [car.rig.muzzlePoint];
 
-    car.mesh.updateMatrixWorld(true);
-    car.rig.muzzlePoint.getWorldPosition(this._muzzlePos);
-    car.rig.turretRecoil.localToWorld(this._fwdTarget.copy(this._muzzleTipLocal));
-    const barrelDir = this._dir.copy(this._fwdTarget).sub(this._muzzlePos).normalize();
+    for (const mPoint of muzzles) {
+      const slot = this.bolts.find(b => !b.active);
+      if (!slot) break;
 
-    if (targetWorld) {
-      const toTgt = this._fwdTarget.copy(targetWorld).sub(this._muzzlePos);
-      const len = toTgt.length();
-      if (len > 2.5) {
-        toTgt.multiplyScalar(1 / len);
-        if (toTgt.dot(barrelDir) > 0.88) {
-          barrelDir.copy(toTgt);
+      car.mesh.updateMatrixWorld(true);
+      mPoint.getWorldPosition(this._muzzlePos);
+      car.rig.turretRecoil.localToWorld(this._fwdTarget.copy(this._muzzleTipLocal));
+      const barrelDir = this._dir.copy(this._fwdTarget).sub(this._muzzlePos).normalize();
+
+      if (targetWorld) {
+        const toTgt = this._fwdTarget.copy(targetWorld).sub(this._muzzlePos);
+        const len = toTgt.length();
+        if (len > 2.5) {
+          toTgt.multiplyScalar(1 / len);
+          if (toTgt.dot(barrelDir) > 0.88) {
+            barrelDir.copy(toTgt);
+          }
         }
       }
+
+      const boltSpd = Math.max(270, Math.abs(car.speed) + 215);
+      slot.active = true;
+      slot.x = this._muzzlePos.x;
+      slot.y = this._muzzlePos.y;
+      slot.z = this._muzzlePos.z;
+      slot.vx = barrelDir.x * boltSpd;
+      slot.vy = barrelDir.y * boltSpd;
+      slot.vz = barrelDir.z * boltSpd;
+      slot.life = 0.72;
+      slot.damage = car.isPlayer ? PLAYER_BOLT_DAMAGE : AI_BOLT_DAMAGE;
+      slot.ownerId = car.id;
+      slot.isPlayer = car.isPlayer;
+
+      slot.mesh.material = car.isPlayer ? this.playerBoltMat : this.aiBoltMat;
+      slot.mesh.position.set(slot.x, slot.y, slot.z);
+      this._quat.setFromUnitVectors(this._lookDir, barrelDir);
+      slot.mesh.quaternion.copy(this._quat);
+      slot.mesh.visible = true;
     }
-
-    const boltSpd = Math.max(270, Math.abs(car.speed) + 215);
-    slot.active = true;
-    slot.x = this._muzzlePos.x;
-    slot.y = this._muzzlePos.y;
-    slot.z = this._muzzlePos.z;
-    slot.vx = barrelDir.x * boltSpd;
-    slot.vy = barrelDir.y * boltSpd;
-    slot.vz = barrelDir.z * boltSpd;
-    slot.life = 0.72;
-    slot.damage = car.isPlayer ? PLAYER_BOLT_DAMAGE : AI_BOLT_DAMAGE;
-    slot.ownerId = car.id;
-    slot.isPlayer = car.isPlayer;
-
-    slot.mesh.material = car.isPlayer ? this.playerBoltMat : this.aiBoltMat;
-    slot.mesh.position.set(slot.x, slot.y, slot.z);
-    this._quat.setFromUnitVectors(this._lookDir, barrelDir);
-    slot.mesh.quaternion.copy(this._quat);
-    slot.mesh.visible = true;
 
     car.gunRecoil = 0.09;
     car.muzzleFlashT = 0.055;
@@ -350,11 +464,93 @@ export class WeaponSystem {
     ev.onFire(car);
   }
 
+  fireRocketFromCar(
+    car: Car,
+    targetWorld: THREE.Vector3 | null,
+    lockedCar: Car | null,
+    ev: CombatEvents,
+    particles: Particles
+  ): void {
+    const slot = this.rockets.find(r => !r.active);
+    if (!slot) return;
+
+    car.mesh.updateMatrixWorld(true);
+    car.rig.rocketMuzzlePoint.getWorldPosition(this._rocketMuzzlePos);
+    car.rig.rocketLauncherPitch.localToWorld(this._fwdTarget.copy(this._rocketTipLocal));
+    const launchDir = this._dir.copy(this._fwdTarget).sub(this._rocketMuzzlePos).normalize();
+
+    if (lockedCar) {
+      this._fwdTarget.set(lockedCar.x, lockedCar.y + 0.65, lockedCar.z).sub(this._rocketMuzzlePos);
+      const len = this._fwdTarget.length();
+      if (len > 3) {
+        this._fwdTarget.multiplyScalar(1 / len);
+        if (this._fwdTarget.dot(launchDir) > 0.65) {
+          launchDir.copy(this._fwdTarget);
+        }
+      }
+    } else if (targetWorld) {
+      this._fwdTarget.copy(targetWorld).sub(this._rocketMuzzlePos);
+      const len = this._fwdTarget.length();
+      if (len > 3) {
+        this._fwdTarget.multiplyScalar(1 / len);
+        if (this._fwdTarget.dot(launchDir) > 0.65) {
+          launchDir.copy(this._fwdTarget);
+        }
+      }
+    }
+
+    const initSpd = Math.max(92, Math.abs(car.speed) + 75);
+    slot.active = true;
+    slot.x = this._rocketMuzzlePos.x;
+    slot.y = this._rocketMuzzlePos.y;
+    slot.z = this._rocketMuzzlePos.z;
+    slot.vx = launchDir.x * initSpd;
+    slot.vy = launchDir.y * initSpd;
+    slot.vz = launchDir.z * initSpd;
+    slot.speed = initSpd;
+    slot.life = 2.8;
+    slot.ownerId = car.id;
+    slot.isPlayer = car.isPlayer;
+    slot.targetCar = lockedCar;
+    if (targetWorld) slot.targetWorld.copy(targetWorld);
+    else slot.targetWorld.copy(this._rocketMuzzlePos).addScaledVector(launchDir, 120);
+
+    slot.mesh.position.set(slot.x, slot.y, slot.z);
+    this._quat.setFromUnitVectors(this._lookDir, launchDir);
+    slot.mesh.quaternion.copy(this._quat);
+    slot.mesh.visible = true;
+
+    car.rocketCd = car.isPlayer ? 2.4 : 4.5;
+    car.rocketBackblastT = 0.15;
+
+    // Launch backblast fiery smoke plume behind the vehicle launcher
+    for (let i = 0; i < 9; i++) {
+      particles.spawn(
+        this._rocketMuzzlePos.x - launchDir.x * 0.75 + (Math.random() - 0.5) * 0.35,
+        this._rocketMuzzlePos.y + (Math.random() - 0.5) * 0.25,
+        this._rocketMuzzlePos.z - launchDir.z * 0.75 + (Math.random() - 0.5) * 0.35,
+        -launchDir.x * (6 + Math.random() * 8) + (Math.random() - 0.5) * 2.8,
+        1.2 + Math.random() * 3.2,
+        -launchDir.z * (6 + Math.random() * 8) + (Math.random() - 0.5) * 2.8,
+        0.35 + Math.random() * 0.25,
+        1.2,
+        1.0,
+        0.52,
+        0.14,
+        2.8,
+        0.82
+      );
+    }
+
+    ev.onFireRocket?.(car);
+  }
+
   update(
     dt: number,
     cars: Car[],
     racing: boolean,
     playerTarget: THREE.Vector3 | null,
+    lockedTarget: Car | null,
     particles: Particles,
     ev: CombatEvents
   ): void {
@@ -370,10 +566,13 @@ export class WeaponSystem {
           if (car.input.fire && car.fireCd <= 0) {
             this.fireFromCar(car, playerTarget, ev);
           }
+          if (car.input.rocket && car.rocketCd <= 0) {
+            this.fireRocketFromCar(car, playerTarget, lockedTarget, ev, particles);
+          }
           continue;
         }
 
-        // AI bonnet turret: seek nearest living enemy in forward 36-deg cone
+        // AI weapons: seek nearest living enemy in forward cone
         let bestTgt: Car | null = null;
         let bestDist = 78;
         const sh = Math.sin(car.h);
@@ -397,6 +596,9 @@ export class WeaponSystem {
           if (car.aiBurstTimer > 0) {
             car.aiBurstTimer -= dt;
             if (car.fireCd <= 0) this.fireFromCar(car, this._localAim, ev);
+            if (car.rocketCd <= 0 && bestDist < 60 && Math.random() < 0.28) {
+              this.fireRocketFromCar(car, this._localAim, bestTgt, ev, particles);
+            }
           } else {
             car.aiBurstWait -= dt;
             if (car.aiBurstWait <= 0) {
@@ -411,7 +613,7 @@ export class WeaponSystem {
       }
     }
 
-    // 2. Step projectiles & swept car hit detection
+    // 2. Step bullets & swept car hit detection
     const hitRadiusSq = 1.95 * 1.95;
     for (const b of this.bolts) {
       if (!b.active) continue;
@@ -473,7 +675,103 @@ export class WeaponSystem {
       b.mesh.position.set(bx, by, bz);
     }
 
-    // 3. Step explosion spheres/shockwaves
+    // 3. Step high-explosive Rockets: acceleration, tracking, tail flame/smoke trail & 1-hit blast
+    const rocketHitRadiusSq = 2.25 * 2.25;
+    for (const r of this.rockets) {
+      if (!r.active) continue;
+      r.life -= dt;
+      if (r.life <= 0) {
+        r.active = false;
+        r.mesh.visible = false;
+        this.spawnExplosion(r.x, r.y, r.z, particles, 1.25);
+        continue;
+      }
+
+      // Continuous rocket motor acceleration
+      r.speed = Math.min(235, r.speed + 130 * dt);
+      this._dir.set(r.vx, r.vy, r.vz).normalize();
+
+      // Soft homing toward locked rival car
+      if (r.targetCar && !r.targetCar.blasted && r.targetCar.respawnProtect <= 0) {
+        this._toCar.set(r.targetCar.x - r.x, r.targetCar.y + 0.65 - r.y, r.targetCar.z - r.z).normalize();
+        if (this._dir.dot(this._toCar) > 0.45) {
+          this._dir.lerp(this._toCar, clamp(4.8 * dt, 0, 0.45)).normalize();
+        }
+      }
+
+      r.vx = this._dir.x * r.speed;
+      r.vy = this._dir.y * r.speed;
+      r.vz = this._dir.z * r.speed;
+
+      const ax = r.x;
+      const ay = r.y;
+      const az = r.z;
+      const bx = ax + r.vx * dt;
+      const by = ay + r.vy * dt;
+      const bz = az + r.vz * dt;
+
+      // Fiery thruster sparks & expanding smoke plume behind rocket tail
+      for (let k = 0; k < 2; k++) {
+        particles.spawn(
+          ax - this._dir.x * 0.45 + (Math.random() - 0.5) * 0.2,
+          ay - this._dir.y * 0.45 + (Math.random() - 0.5) * 0.2,
+          az - this._dir.z * 0.45 + (Math.random() - 0.5) * 0.2,
+          -this._dir.x * 6 + (Math.random() - 0.5) * 2.5,
+          0.8 + Math.random() * 2.5,
+          -this._dir.z * 6 + (Math.random() - 0.5) * 2.5,
+          0.42 + Math.random() * 0.35,
+          1.6,
+          1.0,
+          0.42 + Math.random() * 0.4,
+          0.08,
+          3.2,
+          0.9
+        );
+      }
+
+      let hitCar: Car | null = null;
+      for (const c of cars) {
+        if (c.blasted || c.id === r.ownerId) continue;
+        const dSq = distSqPointToSegment(c.x, c.y + 0.68, c.z, ax, ay, az, bx, by, bz);
+        if (dSq <= rocketHitRadiusSq) {
+          hitCar = c;
+          break;
+        }
+      }
+
+      if (hitCar) {
+        r.active = false;
+        r.mesh.visible = false;
+        const shooter = carMap.get(r.ownerId) || null;
+        // One Rocket Hit: Instant Obliteration & Respawn Behind!
+        if (hitCar.respawnProtect <= 0 && !hitCar.remote) {
+          hitCar.hp = 0;
+          hitCar.sinceHit = 0;
+          hitCar.hit = 4.8;
+          ev.onHit(hitCar, shooter, 100);
+          this.blastCar(hitCar, shooter, particles, ev, true);
+        } else if (hitCar.respawnProtect <= 0 && shooter?.isPlayer) {
+          ev.onHit(hitCar, shooter, 100);
+        }
+        continue;
+      }
+
+      if (by <= 0.05) {
+        r.active = false;
+        r.mesh.visible = false;
+        this.spawnExplosion(bx, 0.35, bz, particles, 1.35);
+        continue;
+      }
+
+      r.x = bx;
+      r.y = by;
+      r.z = bz;
+      r.mesh.position.set(bx, by, bz);
+      this._quat.setFromUnitVectors(this._lookDir, this._dir);
+      r.mesh.quaternion.copy(this._quat);
+    }
+
+    // 4. Step explosion spheres/shockwaves
     for (const ex of this.blasts) {
       if (!ex.active) continue;
       ex.age += dt;
@@ -491,7 +789,7 @@ export class WeaponSystem {
       (ex.ring.material as THREE.MeshBasicMaterial).opacity = (1 - t) * 0.78;
     }
 
-    // 4. Low-HP smoke plume on heavily damaged cars
+    // 5. Low-HP smoke plume on heavily damaged cars
     for (const c of cars) {
       if (!c.blasted && c.hp < 45 && Math.random() < 0.45) {
         particles.spawn(
@@ -533,14 +831,14 @@ export class WeaponSystem {
     }
   }
 
-  blastCar(victim: Car, shooter: Car | null, particles: Particles, ev: CombatEvents): void {
+  blastCar(victim: Car, shooter: Car | null, particles: Particles, ev: CombatEvents, isRocket = false): void {
     if (victim.blasted) return;
     victim.blasted = true;
     victim.blastTimer = 1.25;
     victim.hp = 0;
     victim.lastAttackerId = shooter ? shooter.id : null;
     if (shooter) shooter.takedowns++;
-    this.spawnExplosion(victim.x, victim.y, victim.z, particles, 1.15);
-    ev.onBlast(victim, shooter);
+    this.spawnExplosion(victim.x, victim.y, victim.z, particles, isRocket ? 1.6 : 1.15);
+    ev.onBlast(victim, shooter, isRocket);
   }
 }

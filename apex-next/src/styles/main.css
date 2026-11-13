@@ -793,6 +793,52 @@
     opacity: 1;
   }
 
+  #rocketWrap {
+    inline-size: 190px;
+    padding: 6px 10px;
+    border-radius: 10px;
+    background: rgba(8, 12, 22, 0.78);
+    border: 1px solid rgba(255, 110, 0, 0.35);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  #rocketWrap.ready {
+    border-color: rgba(255, 136, 0, 0.85);
+    box-shadow: 0 0 14px rgba(255, 85, 0, 0.45);
+  }
+
+  .rocket-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 1.2px;
+    color: #ff9100;
+    margin-block-end: 4px;
+  }
+
+  #rocketWrap.ready .rocket-header {
+    color: #ffb300;
+  }
+
+  .rocket-track {
+    block-size: 7px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.14);
+    overflow: hidden;
+  }
+
+  #rocketFill {
+    block-size: 100%;
+    inline-size: var(--rocket-pct, 100%);
+    background: linear-gradient(90deg, #ff3d00, #ff9100);
+    transition: inline-size 0.08s linear;
+  }
+
+  #rocketWrap.ready #rocketFill {
+    background: linear-gradient(90deg, #ff6d00, #ffd600);
+  }
+
   #hpWrap {
     inline-size: 190px;
     padding: 6px 10px;
@@ -1088,11 +1134,21 @@
     border-color: var(--accent-orange);
     background: rgba(255, 90, 24, 0.55);
   }
+  #tRocket {
+    inset-inline-end: 96px;
+    inset-block-end: 192px;
+    inline-size: 66px;
+    block-size: 66px;
+    font-size: 11px;
+    border-color: #ff3d00;
+    background: rgba(230, 45, 15, 0.55);
+  }
 
   body.touch #minimap { inset-block-end: auto; inset-block-start: 114px; inline-size: 116px; block-size: 116px; }
   body.touch .hud-bottom-right { inset-block-end: auto; inset-block-start: 126px; }
   body.touch #speedo { inline-size: 124px; block-size: 124px; }
   body.touch #nosWrap,
+  body.touch #rocketWrap,
   body.touch #hpWrap { inline-size: 140px; }
   body.touch #crosshair,
   body.touch #help,

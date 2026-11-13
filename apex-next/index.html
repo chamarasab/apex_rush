@@ -48,6 +48,15 @@
     <canvas id="minimap" width="180" height="180" aria-label="Track minimap"></canvas>
 
     <div class="hud-bottom-right">
+      <div id="rocketWrap">
+        <div class="rocket-header">
+          <span id="rocketTag">ROCKETS [R-CLICK / E]</span>
+          <b id="rocketPct">READY</b>
+        </div>
+        <div class="rocket-track">
+          <div id="rocketFill"></div>
+        </div>
+      </div>
       <div id="hpWrap">
         <div class="hp-header">
           <span id="hpTag">ARMOR</span>
@@ -73,7 +82,7 @@
     <div id="wrongway" class="hidden">WRONG WAY</div>
     <div id="toast" role="status" aria-live="polite"></div>
     <div id="help">
-      W / ↑ Gas · S Reverse · A / D Steer · <b>SPACE / ↓ Drift</b> · <b>SHIFT NOS</b> · <b>Mouse Aim · L-Click / F Gun</b> · C Cam · R Reset · P Pause
+      W / ↑ Gas · S Reverse · A / D Steer · <b>SPACE / ↓ Drift</b> · <b>SHIFT NOS</b> · <b>L-Click Gun</b> · <b>R-Click / E Rockets</b> · C Cam · R Reset · P Pause
     </div>
   </div>
 
@@ -86,6 +95,7 @@
     <button type="button" class="tbtn" id="tDrift">DRIFT</button>
     <button type="button" class="tbtn" id="tNos">NOS</button>
     <button type="button" class="tbtn" id="tFire">FIRE</button>
+    <button type="button" class="tbtn" id="tRocket">ROCKET</button>
   </div>
 
   <div id="hudTopActions" class="hud-top-actions hidden">
@@ -184,7 +194,7 @@
     </section>
 
     <div class="showroom-hint" aria-hidden="true">
-      <span>Drag to orbit 3D car · Drift: <b>SPACE / ↓</b> · NOS: <b>SHIFT</b> · Bonnet Gun: <b>Mouse + Click</b></span>
+      <span>Drag to orbit 3D car · Drift: <b>SPACE / ↓</b> · NOS: <b>SHIFT</b> · Weapons: <b>L-Click Gun · R-Click / E Rockets</b></span>
     </div>
   </main>
 
@@ -286,9 +296,10 @@
       <dt>Brake / Reverse</dt><dd>S or ↓ when stopped (LT)</dd>
       <dt>Steer</dt><dd>A / D or ← / → (Stick)</dd>
       <dt>Drift (Charges NOS)</dt><dd>SPACE or ↓ at speed (A / X)</dd>
-      <dt>NOS Boost</dt><dd>SHIFT (B / Y / RB)</dd>
-      <dt>Aim Bonnet Gun</dt><dd>Mouse Cursor</dd>
+      <dt>NOS Boost</dt><dd>SHIFT (B / Y)</dd>
+      <dt>Aim Weapon Turret</dt><dd>Mouse Cursor</dd>
       <dt>Fire Bonnet Gun</dt><dd>Left Click or F (LB)</dd>
+      <dt>Launch Dicky Rocket</dt><dd>Right Click or E / X (RB)</dd>
       <dt>Camera View</dt><dd>C</dd>
       <dt>Reset to Track</dt><dd>R</dd>
       <dt>Mute / Pause</dt><dd>M / P or Esc</dd>

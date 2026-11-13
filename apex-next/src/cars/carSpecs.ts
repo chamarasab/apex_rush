@@ -6,7 +6,8 @@ export type CarId =
   | '370z'
   | 'cybertruck'
   | 'gwagon'
-  | 'porsche';
+  | 'porsche'
+  | 'interceptor';
 
 export interface CarSpec {
   id: CarId;
@@ -44,6 +45,7 @@ export interface CarSpec {
   axleRear: number;
   hoodCam: [number, number]; // [y, z]
   bonnetGun: [number, number]; // [y, z] hood turret mount position
+  rocketLauncher: [number, number]; // [y, z] dicky/spoiler rocket launcher mount position
   caliperColor: number;
   rimColor: number;
   engineType: 'rb26' | '2jz' | 'v8' | 'v10' | 'vq37' | 'ev' | 'flat6';
@@ -89,6 +91,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     axleRear: -1.34,
     hoodCam: [1.14, 0.72],
     bonnetGun: [0.765, 1.42],
+    rocketLauncher: [1.12, -1.95],
     caliperColor: 0xc68e28,
     rimColor: 0xd6dce3, // Machined silver HRE 6-spoke style
     engineType: 'rb26',
@@ -126,6 +129,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     axleRear: -1.30,
     hoodCam: [1.08, 0.66],
     bonnetGun: [0.80, 1.42],
+    rocketLauncher: [1.15, -1.90],
     caliperColor: 0xe52521,
     rimColor: 0xd8dde4,
     engineType: '2jz',
@@ -164,6 +168,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     axleRear: -1.44,
     hoodCam: [1.18, 0.58],
     bonnetGun: [0.905, 1.48],
+    rocketLauncher: [1.18, -2.10],
     caliperColor: 0xff2a2a,
     rimColor: 0x262b33,
     engineType: 'v8',
@@ -202,6 +207,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     axleRear: -1.32,
     hoodCam: [0.96, 0.72],
     bonnetGun: [0.70, 1.56],
+    rocketLauncher: [1.05, -1.85],
     caliperColor: 0xf5c518,
     rimColor: 0x2a2d34,
     engineType: 'v10',
@@ -239,6 +245,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     axleRear: -1.24,
     hoodCam: [1.08, 0.65],
     bonnetGun: [0.79, 1.32],
+    rocketLauncher: [1.10, -1.80],
     caliperColor: 0xff3b3b,
     rimColor: 0xcfd6df,
     engineType: 'vq37',
@@ -278,6 +285,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     axleRear: -1.58,
     hoodCam: [1.58, 0.72],
     bonnetGun: [1.14, 1.72],
+    rocketLauncher: [1.32, -2.15],
     caliperColor: 0xff3b30,
     rimColor: 0x1e2228,
     engineType: 'ev',
@@ -316,6 +324,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     axleRear: -1.42,
     hoodCam: [1.58, 0.62],
     bonnetGun: [1.09, 1.56],
+    rocketLauncher: [1.65, -2.05],
     caliperColor: 0xe62020,
     rimColor: 0x22262e,
     engineType: 'v8',
@@ -354,11 +363,51 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     axleRear: -1.18,
     hoodCam: [1.06, 0.65],
     bonnetGun: [0.68, 1.28],
+    rocketLauncher: [1.08, -1.82],
     caliperColor: 0xe62020,
     rimColor: 0x1b1e24, // Fuchs matte black centers with chrome dish lips
     engineType: 'flat6',
     hasTurbo: true,
     bars: { speed: 1.0, accel: 0.96, drift: 0.95, nos: 0.94 },
+  },
+  interceptor: {
+    id: 'interceptor',
+    name: 'V8 Interceptor "Death Race"',
+    shortName: 'Interceptor',
+    tag: 'Mad Max Armor · Twin Cannons & Rear Rocket Battery',
+    powerHp: 950,
+    weightKg: 2280,
+    zeroToHundred: '2.9s',
+    topKmh: 330,
+    driveType: 'RWD',
+    bodyRollMult: 0.95,
+    defaultColor: '#1a1917',
+    defaultUnderglow: '#ff3700',
+    top: 91.6,
+    accel: 28.5,
+    grip: 29.5,
+    brake: 48,
+    driftGrip: 8.6,
+    driftControl: 1.25,
+    nosPower: 24.5,
+    nosTopBonus: 1.30,
+    nosChargeRate: 1.28,
+    mass: 1.62,
+    length: 4.82,
+    width: 2.06,
+    wheelR: 0.40,
+    wheelW: 0.36,
+    track: 0.98,
+    axleFront: 1.48,
+    axleRear: -1.42,
+    hoodCam: [1.22, 0.60],
+    bonnetGun: [0.88, 1.44],
+    rocketLauncher: [1.20, -2.02],
+    caliperColor: 0xd65012,
+    rimColor: 0x181a1e,
+    engineType: 'v8',
+    hasTurbo: true,
+    bars: { speed: 0.96, accel: 0.96, drift: 0.94, nos: 0.95 },
   },
 };
 
@@ -371,5 +420,6 @@ export const CAR_IDS: CarId[] = [
   'cybertruck',
   'gwagon',
   'porsche',
+  'interceptor',
 ];
 

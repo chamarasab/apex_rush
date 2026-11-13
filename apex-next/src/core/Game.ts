@@ -1097,20 +1097,27 @@ export class Game {
     }
   }
 
-  private handleBlast(victim: Car, shooter: Car | null, wrongWay = false): void {
+  private handleBlast(victim: Car, shooter: Car | null, mode: boolean | 'wrongway' | 'rocket' = false): void {
     const player = this.player!;
+    const isRocket = mode === true || mode === 'rocket';
+    const isWrongWay = mode === 'wrongway';
     const dist = Math.hypot(victim.x - player.x, victim.z - player.z);
-    this.audio.playExplosion(clamp(1 - dist / 140, 0.28, 1.0));
-    if (dist < 65) {
-      this.camCtl.shake = Math.min(1.0, Math.max(this.camCtl.shake, 0.72 * (1 - dist / 75)));
+    this.audio.playExplosion(clamp(1 - dist / (isRocket ? 180 : 140), 0.28, 1.0));
+    if (dist < (isRocket ? 90 : 65)) {
+      const mult = isRocket ? 1.0 : 0.72;
+      this.camCtl.shake = Math.min(1.0, Math.max(this.camCtl.shake, mult * (1 - dist / (isRocket ? 100 : 75))));
     }
-    if (wrongWay) {
+    if (isWrongWay) {
       this.hud.toast('AUTO-EXPLODED — Wrong way for 5s!', 2.2);
     } else if (shooter === player) {
-      player.nos = Math.min(100, player.nos + 25);
-      this.hud.toast(`★ BLASTED ${victim.name}! +25% NOS`, 2.2);
+      const nosBonus = isRocket ? 35 : 25;
+      player.nos = Math.min(100, player.nos + nosBonus);
+      const tag = isRocket ? '★ ROCKET OBLITERATED' : '★ BLASTED';
+      this.hud.toast(`${tag} ${victim.name}! +${nosBonus}% NOS`, 2.4);
     } else if (victim === player) {
-      this.hud.toast(`BLASTED by ${shooter ? shooter.name : 'enemy fire'}! Respawning...`, 2.0);
+      const killer = shooter ? shooter.name : 'enemy fire';
+      const msg = isRocket ? `OBLITERATED by ${killer}'s rocket! Respawning...` : `BLASTED by ${killer}! Respawning...`;
+      this.hud.toast(msg, 2.2);
     }
   }
 
@@ -1160,16 +1167,26 @@ export class Game {
           this.camCtl.shake = Math.max(this.camCtl.shake, 0.045);
         }
       },
+      onFireRocket: (car: Car) => {
+        const d = Math.hypot(car.x - player.x, car.z - player.z);
+        if (car === player || d < 95) {
+          this.audio.playRocketLaunch(car === player);
+        }
+        if (car === player) {
+          this.camCtl.shake = Math.max(this.camCtl.shake, 0.22);
+        }
+      },
       onHit: (_victim: Car, shooter: Car | null) => {
         if (shooter === player) {
           this.hud.flashHit();
           this.audio.playHitMarker();
         }
       },
-      onBlast: (victim: Car, shooter: Car | null) => this.handleBlast(victim, shooter),
+      onBlast: (victim: Car, shooter: Car | null, isRocket?: boolean) =>
+        this.handleBlast(victim, shooter, isRocket ? 'rocket' : false),
     };
 
-    this.weapons.update(dt, this.cars, race.phase === 'racing', aimTarget, this.particles, combatEv);
+    this.weapons.update(dt, this.cars, race.phase === 'racing', aimTarget, this.lockedTarget, this.particles, combatEv);
 
     this.collideCars();
     race.update(dt, {
@@ -1192,7 +1209,7 @@ export class Game {
       wrongWayBlast: car => {
         this.weapons.blastCar(car, null, this.particles, {
           ...combatEv,
-          onBlast: victim => this.handleBlast(victim, null, true),
+          onBlast: victim => this.handleBlast(victim, null, 'wrongway'),
         });
       },
     });

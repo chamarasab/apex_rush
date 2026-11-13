@@ -48,6 +48,10 @@ export class HUD {
       'hpFill',
       'hpPct',
       'hpWrap',
+      'rocketFill',
+      'rocketPct',
+      'rocketTag',
+      'rocketWrap',
       'nosFill',
       'nosPct',
       'nosTag',
@@ -249,6 +253,19 @@ export class HUD {
     this.el.driftBadge?.classList.toggle('active', showDrift);
     if (showDrift) {
       this.set('driftPts', `+${Math.round(player.driftScore).toLocaleString()}`);
+    }
+
+    // Rocket Launcher Cooldown Bar
+    const rCd = player.rocketCd;
+    const rReady = rCd <= 0;
+    const rPct = rReady ? 100 : Math.round(clamp((1 - rCd / player.maxRocketCd) * 100, 0, 100));
+    this.set('rocketPct', rReady ? 'READY' : `${rCd.toFixed(1)}s`);
+    if (this.el.rocketFill) {
+      this.el.rocketFill.style.setProperty('--rocket-pct', `${rPct}%`);
+    }
+    this.el.rocketWrap?.classList.toggle('ready', rReady);
+    if (this.el.rocketTag) {
+      this.el.rocketTag.textContent = rReady ? 'ROCKETS [R-CLICK / E]' : 'RELOADING MISSILE';
     }
 
     // Armor HP bar + Blasts count

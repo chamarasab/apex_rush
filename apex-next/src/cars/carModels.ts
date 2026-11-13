@@ -31,6 +31,12 @@ export interface CarVisualRig {
   turretRecoil: THREE.Group;
   muzzleFlash: THREE.Group;
   muzzlePoint: THREE.Object3D;
+  muzzlePoint2?: THREE.Object3D;
+  isTwin?: boolean;
+  rocketLauncherRoot: THREE.Group;
+  rocketLauncherPitch: THREE.Group;
+  rocketMuzzlePoint: THREE.Object3D;
+  rocketBackblastFlash: THREE.Group;
   dispose: () => void;
 }
 
@@ -260,6 +266,8 @@ interface SharedCarAssets {
   mGunAccent: THREE.MeshStandardMaterial;
   mGunSight: THREE.MeshBasicMaterial;
   mMuzzleFlash: THREE.MeshBasicMaterial;
+  mRocketWarhead: THREE.MeshStandardMaterial;
+  mSpikeSteel: THREE.MeshStandardMaterial;
   glowTex: THREE.CanvasTexture;
   contactShadowTex: THREE.CanvasTexture;
   icTex: THREE.CanvasTexture;
@@ -327,6 +335,16 @@ function getSharedAssets(): SharedCarAssets {
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       toneMapped: false,
+    }),
+    mRocketWarhead: new THREE.MeshStandardMaterial({
+      color: 0xee2200,
+      roughness: 0.28,
+      metalness: 0.35,
+    }),
+    mSpikeSteel: new THREE.MeshStandardMaterial({
+      color: 0x7c8492,
+      roughness: 0.32,
+      metalness: 0.92,
     }),
     glowTex: makeGlowTexture(),
     contactShadowTex: makeContactShadowTexture(),
@@ -529,6 +547,27 @@ function getSpecGeos(id: CarId): CachedSpecGeos {
     cabinW = S.width * 0.77;
     cabinTap = 0.76;
     roofSpan = [-0.22, 0.64, 1.258];
+  } else if (id === 'interceptor') {
+    // Mad Max / Death Race V8 Interceptor fastback muscle coupe profile
+    bodyPts = [
+      [-halfL, 0.28],
+      [-halfL + 0.06, 0.88],
+      [-1.38, 0.90],
+      [0.82, 0.90],
+      [2.15, 0.80],
+      [halfL, 0.62],
+      [halfL - 0.06, 0.22],
+      [-halfL + 0.06, 0.22],
+    ];
+    cabinPts = [
+      [-1.52, 0.88],
+      [-0.78, 1.30],
+      [0.26, 1.30],
+      [0.88, 0.88],
+    ];
+    cabinW = S.width * 0.80;
+    cabinTap = 0.80;
+    roofSpan = [-0.30, 0.98, 1.325];
   } else {
     // 370z
     bodyPts = [
@@ -683,13 +722,16 @@ interface BonnetGunParts {
   turretRecoil: THREE.Group;
   muzzleFlash: THREE.Group;
   muzzlePoint: THREE.Object3D;
+  muzzlePoint2?: THREE.Object3D;
+  isTwin?: boolean;
 }
 
 function buildBonnetGun(
   A: SharedCarAssets,
   disposables: { dispose: () => void }[],
   mountY: number,
-  mountZ: number
+  mountZ: number,
+  isTwin = false
 ): BonnetGunParts {
   const turretRoot = new THREE.Group();
   turretRoot.position.set(0, mountY, mountZ);
@@ -710,6 +752,7 @@ function buildBonnetGun(
   const flashConeGeo = new THREE.ConeGeometry(0.09, 0.36, 8);
   flashConeGeo.rotateX(Math.PI / 2);
   const flashCoreGeo = new THREE.SphereGeometry(0.075, 8, 8);
+  const crossBeamGeo = new THREE.BoxGeometry(0.92, 0.05, 0.22);
 
   disposables.push(
     pedGeo,
@@ -723,9 +766,81 @@ function buildBonnetGun(
     barrelGeo,
     brakeGeo,
     flashConeGeo,
-    flashCoreGeo
+    flashCoreGeo,
+    crossBeamGeo
   );
 
+  if (isTwin) {
+    // Twin Heavy Autocannons on reinforced steel cross-mounting armature
+    const basePlate = new THREE.Mesh(crossBeamGeo, A.mGunMetal);
+    basePlate.position.y = 0.02;
+    basePlate.castShadow = true;
+    turretRoot.add(basePlate);
+
+    const turretYaw = new THREE.Group();
+    turretYaw.position.y = 0.048;
+    turretRoot.add(turretYaw);
+
+    const turretPitch = new THREE.Group();
+    turretPitch.position.y = 0.085;
+    turretYaw.add(turretPitch);
+
+    const turretRecoil = new THREE.Group();
+    turretPitch.add(turretRecoil);
+
+    const muzzleFlash = new THREE.Group();
+    muzzleFlash.position.set(0, 0.004, 0.67);
+    muzzleFlash.visible = false;
+    turretRecoil.add(muzzleFlash);
+
+    const muzzlePoint = new THREE.Object3D();
+    muzzlePoint.position.set(-0.38, 0.004, 0.67);
+    const muzzlePoint2 = new THREE.Object3D();
+    muzzlePoint2.position.set(0.38, 0.004, 0.67);
+    turretRecoil.add(muzzlePoint, muzzlePoint2);
+
+    for (const gx of [-0.38, 0.38]) {
+      const gYoke = new THREE.Mesh(yokeGeo, A.mGunMetal);
+      gYoke.position.set(gx, -0.04, 0);
+      gYoke.castShadow = true;
+      turretYaw.add(gYoke);
+
+      const receiver = new THREE.Mesh(bodyGeo, A.mGunMetal);
+      receiver.position.set(gx, 0, -0.02);
+      receiver.castShadow = true;
+
+      const ammoDrum = new THREE.Mesh(drumGeo, A.mGunMetal);
+      ammoDrum.position.set(gx + (gx > 0 ? 0.145 : -0.145), -0.01, -0.02);
+      ammoDrum.castShadow = true;
+
+      const sight = new THREE.Mesh(sightFrameGeo, A.mGunBarrel);
+      sight.position.set(gx, 0.075, -0.02);
+      const sightDot = new THREE.Mesh(sightDotGeo, A.mGunSight);
+      sightDot.position.set(gx, 0.078, 0.028);
+
+      const shroud = new THREE.Mesh(shroudGeo, A.mGunBarrel);
+      shroud.position.set(gx, 0.004, 0.25);
+      shroud.castShadow = true;
+
+      const barrel = new THREE.Mesh(barrelGeo, A.mGunBarrel);
+      barrel.position.set(gx, 0.004, 0.34);
+      barrel.castShadow = true;
+      const brake = new THREE.Mesh(brakeGeo, A.mChrome);
+      brake.position.set(gx, 0.004, 0.625);
+
+      turretRecoil.add(receiver, ammoDrum, sight, sightDot, shroud, barrel, brake);
+
+      const cone = new THREE.Mesh(flashConeGeo, A.mMuzzleFlash);
+      cone.position.set(gx, 0, 0.16);
+      const core = new THREE.Mesh(flashCoreGeo, A.mMuzzleFlash);
+      core.position.set(gx, 0, 0.02);
+      muzzleFlash.add(cone, core);
+    }
+
+    return { turretRoot, turretYaw, turretPitch, turretRecoil, muzzleFlash, muzzlePoint, muzzlePoint2, isTwin: true };
+  }
+
+  // Standard Center-Mounted Gun Turret
   const ped = new THREE.Mesh(pedGeo, A.mGunMetal);
   ped.position.y = 0.005;
   ped.castShadow = true;
@@ -798,7 +913,112 @@ function buildBonnetGun(
   muzzlePoint.position.set(0, 0.004, 0.67);
   turretRecoil.add(muzzlePoint);
 
-  return { turretRoot, turretYaw, turretPitch, turretRecoil, muzzleFlash, muzzlePoint };
+  return { turretRoot, turretYaw, turretPitch, turretRecoil, muzzleFlash, muzzlePoint, isTwin: false };
+}
+
+interface RocketLauncherParts {
+  rocketLauncherRoot: THREE.Group;
+  rocketLauncherPitch: THREE.Group;
+  rocketMuzzlePoint: THREE.Object3D;
+  rocketBackblastFlash: THREE.Group;
+}
+
+function buildRocketLauncher(
+  A: SharedCarAssets,
+  disposables: { dispose: () => void }[],
+  mountY: number,
+  mountZ: number,
+  isInterceptor: boolean
+): RocketLauncherParts {
+  const rocketLauncherRoot = new THREE.Group();
+  rocketLauncherRoot.position.set(0, mountY, mountZ);
+
+  // Mount pedestal / brackets attaching to trunk lid / spoiler
+  const mountBaseGeo = new THREE.BoxGeometry(0.38, 0.06, 0.28);
+  const podBoxGeo = new THREE.BoxGeometry(0.48, 0.26, 0.54);
+  const tubeGeo = new THREE.CylinderGeometry(0.046, 0.048, 0.38, 12);
+  tubeGeo.rotateX(Math.PI / 2);
+  const warheadGeo = new THREE.ConeGeometry(0.044, 0.12, 10);
+  warheadGeo.rotateX(Math.PI / 2);
+  const deflectorGeo = new THREE.BoxGeometry(0.50, 0.18, 0.04);
+  const flashConeGeo = new THREE.ConeGeometry(0.14, 0.48, 8);
+  flashConeGeo.rotateX(-Math.PI / 2); // points backward (-Z)
+  const sideArmorGeo = new THREE.BoxGeometry(0.03, 0.18, 0.48);
+
+  disposables.push(
+    mountBaseGeo,
+    podBoxGeo,
+    tubeGeo,
+    warheadGeo,
+    deflectorGeo,
+    flashConeGeo,
+    sideArmorGeo
+  );
+
+  const mountBase = new THREE.Mesh(mountBaseGeo, A.mDarkTrim);
+  mountBase.position.y = 0.02;
+  mountBase.castShadow = true;
+  rocketLauncherRoot.add(mountBase);
+
+  // Pitch pivot group
+  const rocketLauncherPitch = new THREE.Group();
+  rocketLauncherPitch.position.set(0, 0.10, 0);
+  rocketLauncherPitch.rotation.x = 0.035; // slight upward ballistic rake
+  rocketLauncherRoot.add(rocketLauncherPitch);
+
+  const pod = new THREE.Mesh(podBoxGeo, isInterceptor ? A.mGunMetal : A.mCarbon);
+  pod.castShadow = true;
+  rocketLauncherPitch.add(pod);
+
+  // Side armor plates with hazard accents
+  for (const sx of [-1, 1]) {
+    const side = new THREE.Mesh(sideArmorGeo, A.mGunAccent);
+    side.position.set(sx * 0.245, 0, 0);
+    rocketLauncherPitch.add(side);
+  }
+
+  // 4 launch tubes (2 high x 2 wide) with visible loaded rockets
+  const tubeOffsets: [number, number][] = [
+    [-0.12, 0.06],
+    [0.12, 0.06],
+    [-0.12, -0.06],
+    [0.12, -0.06],
+  ];
+
+  for (const [tx, ty] of tubeOffsets) {
+    const tube = new THREE.Mesh(tubeGeo, A.mGunBarrel);
+    tube.position.set(tx, ty, 0.10);
+    const warhead = new THREE.Mesh(warheadGeo, A.mRocketWarhead);
+    warhead.position.set(tx, ty, 0.28);
+    rocketLauncherPitch.add(tube, warhead);
+  }
+
+  // Rear backblast deflector plate
+  const deflector = new THREE.Mesh(deflectorGeo, A.mDarkTrim);
+  deflector.position.set(0, 0.02, -0.28);
+  deflector.rotation.x = -0.25;
+  rocketLauncherPitch.add(deflector);
+
+  // Backblast flame flash cone pointing backward (-Z)
+  const rocketBackblastFlash = new THREE.Group();
+  rocketBackblastFlash.position.set(0, 0, -0.32);
+  rocketBackblastFlash.visible = false;
+  const bbCone = new THREE.Mesh(flashConeGeo, A.mMuzzleFlash);
+  bbCone.position.set(0, 0, -0.24);
+  rocketBackblastFlash.add(bbCone);
+  rocketLauncherPitch.add(rocketBackblastFlash);
+
+  // Forward rocket launch point (+Z)
+  const rocketMuzzlePoint = new THREE.Object3D();
+  rocketMuzzlePoint.position.set(0, 0.06, 0.38);
+  rocketLauncherPitch.add(rocketMuzzlePoint);
+
+  return {
+    rocketLauncherRoot,
+    rocketLauncherPitch,
+    rocketMuzzlePoint,
+    rocketBackblastFlash,
+  };
 }
 
 export function buildCarVisual(
@@ -1514,6 +1734,165 @@ export function buildCarVisual(
       [-0.50, 0.23, -halfL - 0.02],
       [0.50, 0.23, -halfL - 0.02],
     ];
+  } else if (id === 'interceptor') {
+    // Mad Max / Death Race Falcon XB V8 Interceptor:
+    // Heavy ramming cowcatcher wedge with 6 forward steel spikes,
+    // supercharger blower scoop bursting from hood with red butterfly valves and belt pulley,
+    // steel windshield armor bars and rear louvers, exterior roll cage tubing,
+    // 4x2 zoomie side exhausts, and ducktail spoiler.
+
+    const cabinW = S.width * 0.80;
+    const plowBladeGeo = new THREE.BoxGeometry(0.08, 0.32, 0.58);
+    const spikeGeo = new THREE.ConeGeometry(0.038, 0.32, 8);
+    spikeGeo.rotateX(Math.PI / 2);
+    const blowerBodyGeo = new THREE.BoxGeometry(0.38, 0.22, 0.44);
+    const blowerScoopGeo = new THREE.BoxGeometry(0.34, 0.12, 0.18);
+    const valveGeo = new THREE.CylinderGeometry(0.042, 0.042, 0.02, 12);
+    valveGeo.rotateX(Math.PI / 2);
+    const pulleyGeo = new THREE.CylinderGeometry(0.065, 0.065, 0.035, 14);
+    pulleyGeo.rotateX(Math.PI / 2);
+    const beltGeo = new THREE.BoxGeometry(0.14, 0.19, 0.025);
+    const louverGeo = new THREE.BoxGeometry(cabinW * 0.88, 0.024, 0.10);
+    const rollTubeLongGeo = new THREE.CylinderGeometry(0.028, 0.028, 2.45, 8);
+    rollTubeLongGeo.rotateX(Math.PI / 2);
+    const rollTubeCrossGeo = new THREE.CylinderGeometry(0.026, 0.026, cabinW * 0.90, 8);
+    rollTubeCrossGeo.rotateZ(Math.PI / 2);
+    const meshGuardGeo = new THREE.BoxGeometry(0.02, 0.38, 0.62);
+    const ducktailGeo = new THREE.BoxGeometry(S.width * 0.86, 0.12, 0.26);
+    const hlArmorGeo = new THREE.BoxGeometry(0.36, 0.14, 0.04);
+    const tailGrilleGeo = new THREE.BoxGeometry(S.width * 0.82, 0.16, 0.04);
+    const tlLensGeo = new THREE.BoxGeometry(S.width * 0.76, 0.09, 0.05);
+
+    disposables.push(
+      plowBladeGeo,
+      spikeGeo,
+      blowerBodyGeo,
+      blowerScoopGeo,
+      valveGeo,
+      pulleyGeo,
+      beltGeo,
+      louverGeo,
+      rollTubeLongGeo,
+      rollTubeCrossGeo,
+      meshGuardGeo,
+      ducktailGeo,
+      hlArmorGeo,
+      tailGrilleGeo,
+      tlLensGeo
+    );
+
+    // 1. Heavy V-plow cowcatcher wedge with forward steel spikes
+    const plowGroup = new THREE.Group();
+    plowGroup.position.set(0, 0.30, halfL - 0.02);
+    for (const sx of [-1, 1]) {
+      const blade = new THREE.Mesh(plowBladeGeo, A.mGunMetal);
+      blade.position.set(sx * 0.46, 0, 0.08);
+      blade.rotation.y = -sx * 0.38;
+      blade.castShadow = true;
+      plowGroup.add(blade);
+
+      // 3 steel spikes per blade
+      for (let k = 0; k < 3; k++) {
+        const sp = new THREE.Mesh(spikeGeo, A.mSpikeSteel);
+        sp.position.set(sx * (0.24 + k * 0.22), -0.04 + (k % 2) * 0.08, 0.22 - k * 0.08);
+        sp.rotation.y = -sx * 0.32;
+        sp.castShadow = true;
+        plowGroup.add(sp);
+      }
+    }
+    bodyGroup.add(plowGroup);
+
+    // 2. Supercharger blower scoop bursting out of hood
+    const blowerGroup = new THREE.Group();
+    blowerGroup.position.set(0, 0.94, 0.86);
+    const bBody = new THREE.Mesh(blowerBodyGeo, A.mChrome);
+    bBody.castShadow = true;
+    const bScoop = new THREE.Mesh(blowerScoopGeo, A.mGunMetal);
+    bScoop.position.set(0, 0.12, 0.08);
+    bScoop.castShadow = true;
+    blowerGroup.add(bBody, bScoop);
+
+    // 3 red butterfly scoop valve air inlets
+    for (let k = -1; k <= 1; k++) {
+      const v = new THREE.Mesh(valveGeo, A.mRocketWarhead);
+      v.position.set(k * 0.095, 0.12, 0.18);
+      blowerGroup.add(v);
+    }
+    // Exposed drive belt & pulleys on front face
+    const p1 = new THREE.Mesh(pulleyGeo, A.mGunMetal);
+    p1.position.set(0, 0.04, 0.23);
+    const p2 = new THREE.Mesh(pulleyGeo, A.mGunMetal);
+    p2.position.set(0, -0.08, 0.23);
+    const belt = new THREE.Mesh(beltGeo, A.mTire);
+    belt.position.set(0, -0.02, 0.225);
+    blowerGroup.add(p1, p2, belt);
+    bodyGroup.add(blowerGroup);
+
+    // 3. Cockpit roll cage tubing & windshield armor louvers
+    for (const sx of [-1, 1]) {
+      const rTube = new THREE.Mesh(rollTubeLongGeo, A.mGunMetal);
+      rTube.position.set(sx * (cabinW * 0.49), 1.28, -0.15);
+      rTube.castShadow = true;
+      bodyGroup.add(rTube);
+
+      // Side window rebar mesh armor guards
+      const guard = new THREE.Mesh(meshGuardGeo, A.mGrille);
+      guard.position.set(sx * (cabinW * 0.505), 1.10, -0.10);
+      bodyGroup.add(guard);
+
+      // Headlight steel armor bars
+      const hlArmor = new THREE.Mesh(hlArmorGeo, A.mGunAccent);
+      hlArmor.position.set(sx * 0.62, 0.54, halfL + 0.02);
+      bodyGroup.add(hlArmor);
+    }
+    const rCross1 = new THREE.Mesh(rollTubeCrossGeo, A.mGunMetal);
+    rCross1.position.set(0, 1.34, 0.32);
+    const rCross2 = new THREE.Mesh(rollTubeCrossGeo, A.mGunMetal);
+    rCross2.position.set(0, 1.34, -0.72);
+    bodyGroup.add(rCross1, rCross2);
+
+    // Rear window horizontal louvers
+    for (let i = 0; i < 5; i++) {
+      const louver = new THREE.Mesh(louverGeo, A.mDarkTrim);
+      louver.position.set(0, 1.22 - i * 0.08, -0.85 - i * 0.14);
+      louver.rotation.x = -0.32;
+      louver.castShadow = true;
+      bodyGroup.add(louver);
+    }
+
+    // 4. Rear ducktail spoiler on decklid
+    const ducktail = new THREE.Mesh(ducktailGeo, A.mDarkTrim);
+    ducktail.position.set(0, 1.02, -1.98);
+    ducktail.rotation.x = 0.28;
+    ducktail.castShadow = true;
+    bodyGroup.add(ducktail);
+
+    // Taillight grille & lenses
+    add(tailGrilleGeo, A.mGrille, 0, 0.66, -halfL - 0.01);
+    add(tlLensGeo, tailMat, 0, 0.66, -halfL - 0.018);
+
+    // 5. 4x2 zoomie side exhausts ahead of rear tires (8 pipes total)
+    const zoomieGeo = new THREE.CylinderGeometry(0.028, 0.032, 0.32, 8);
+    zoomieGeo.rotateZ(Math.PI / 2);
+    disposables.push(zoomieGeo);
+    for (const sx of [-1, 1]) {
+      for (let i = 0; i < 4; i++) {
+        const zm = new THREE.Mesh(zoomieGeo, A.mChrome);
+        zm.position.set(sx * (halfW + 0.04), 0.24 + i * 0.04, -0.52 - i * 0.12);
+        zm.rotation.y = sx * 0.32;
+        zm.rotation.x = 0.20;
+        zm.castShadow = true;
+        bodyGroup.add(zm);
+      }
+    }
+
+    // NOS flames shoot from the side zoomie tips
+    exhaustOffsets = [
+      [-halfW - 0.10, 0.30, -0.68],
+      [-halfW - 0.10, 0.34, -0.88],
+      [halfW + 0.10, 0.30, -0.68],
+      [halfW + 0.10, 0.34, -0.88],
+    ];
   }
 
   // Wheels + flared wheel arches + hollow deep alloy rims, brake rotors & colored calipers
@@ -1602,8 +1981,12 @@ export function buildCarVisual(
     bodyGroup.add(nosLight);
   }
 
-  const turret = buildBonnetGun(A, disposables, S.bonnetGun[0], S.bonnetGun[1]);
+  const isTwin = id === 'interceptor';
+  const turret = buildBonnetGun(A, disposables, S.bonnetGun[0], S.bonnetGun[1], isTwin);
   bodyGroup.add(turret.turretRoot);
+
+  const launcher = buildRocketLauncher(A, disposables, S.rocketLauncher[0], S.rocketLauncher[1], isTwin);
+  bodyGroup.add(launcher.rocketLauncherRoot);
 
   // Grounding dark ambient occlusion contact shadow plane beneath vehicle
   const aoGeo = new THREE.PlaneGeometry(S.width + 0.95, S.length + 0.95);
@@ -1656,6 +2039,12 @@ export function buildCarVisual(
     turretRecoil: turret.turretRecoil,
     muzzleFlash: turret.muzzleFlash,
     muzzlePoint: turret.muzzlePoint,
+    muzzlePoint2: turret.muzzlePoint2,
+    isTwin: turret.isTwin,
+    rocketLauncherRoot: launcher.rocketLauncherRoot,
+    rocketLauncherPitch: launcher.rocketLauncherPitch,
+    rocketMuzzlePoint: launcher.rocketMuzzlePoint,
+    rocketBackblastFlash: launcher.rocketBackblastFlash,
     dispose: () => {
       for (const d of disposables) d.dispose();
     },
