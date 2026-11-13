@@ -12,6 +12,7 @@ export interface CarInput {
   nos: boolean;
   fire: boolean;
   rocket?: boolean;
+  torpedo?: boolean;
 }
 
 export interface RaceProgress {
@@ -86,7 +87,7 @@ export class Car {
   brakeF: number;
   grip: number;
 
-  input: CarInput = { throttle: 0, brake: 0, steer: 0, drift: false, nos: false, fire: false, rocket: false };
+  input: CarInput = { throttle: 0, brake: 0, steer: 0, drift: false, nos: false, fire: false, rocket: false, torpedo: false };
   net = { x: 0, z: 0, h: 0, vx: 0, vz: 0, steer: 0, flags: 0, age: 0, hp: 100, yaw: 0, pitch: 0 };
 
   // Combat & bonnet-mounted turret state
@@ -108,6 +109,9 @@ export class Car {
   rocketCd = 0;
   maxRocketCd = 2.4;
   rocketBackblastT = 0;
+  torpedoCd = 0;
+  maxTorpedoCd = 4.8;
+  roofTorpedoBackblastT = 0;
   aiBurstTimer = 0;
   aiBurstWait = 0;
 
@@ -505,6 +509,8 @@ export class Car {
     if (this.fireCd > 0) this.fireCd = Math.max(0, this.fireCd - dt);
     if (this.rocketCd > 0) this.rocketCd = Math.max(0, this.rocketCd - dt);
     if (this.rocketBackblastT > 0) this.rocketBackblastT = Math.max(0, this.rocketBackblastT - dt);
+    if (this.torpedoCd > 0) this.torpedoCd = Math.max(0, this.torpedoCd - dt);
+    if (this.roofTorpedoBackblastT > 0) this.roofTorpedoBackblastT = Math.max(0, this.roofTorpedoBackblastT - dt);
     if (this.respawnProtect > 0) this.respawnProtect = Math.max(0, this.respawnProtect - dt);
     this.sinceHit += dt;
     if (this.blasted && this.blastTimer > 0) {
@@ -755,6 +761,15 @@ export class Car {
         const bs = 0.85 + Math.random() * 0.45;
         this.rig.rocketBackblastFlash.scale.set(bs, bs, bs);
       }
+    }
+
+    if (this.rig.roofTorpedoMeshLeft && this.rig.roofTorpedoMeshRight) {
+      const showTorp = this.torpedoCd <= 0;
+      this.rig.roofTorpedoMeshLeft.visible = showTorp;
+      this.rig.roofTorpedoMeshRight.visible = showTorp;
+    }
+    if (this.rig.roofTorpedoBackblast) {
+      this.rig.roofTorpedoBackblast.visible = this.roofTorpedoBackblastT > 0;
     }
   }
 }

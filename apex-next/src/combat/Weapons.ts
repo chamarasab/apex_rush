@@ -35,6 +35,25 @@ interface Rocket {
   mesh: THREE.Group;
 }
 
+interface Torpedo {
+  active: boolean;
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+  speed: number;
+  life: number;
+  ownerId: string;
+  isPlayer: boolean;
+  targetCar: Car | null;
+  targetWorld: THREE.Vector3;
+  climbTimer: number;
+  lateralOffset: number;
+  mesh: THREE.Group;
+}
+
 interface BlastEffect {
   active: boolean;
   age: number;
@@ -46,12 +65,14 @@ interface BlastEffect {
 export interface CombatEvents {
   onFire: (car: Car) => void;
   onFireRocket?: (car: Car) => void;
+  onFireTorpedo?: (car: Car) => void;
   onHit: (victim: Car, shooter: Car | null, damage: number) => void;
-  onBlast: (victim: Car, shooter: Car | null, isRocket?: boolean) => void;
+  onBlast: (victim: Car, shooter: Car | null, mode?: boolean | string) => void;
 }
 
 const BOLT_POOL_SIZE = 96;
 const ROCKET_POOL_SIZE = 16;
+const TORPEDO_POOL_SIZE = 12;
 const BLAST_POOL_SIZE = 18;
 const PLAYER_BOLT_DAMAGE = 24;
 const AI_BOLT_DAMAGE = 8;
@@ -89,6 +110,7 @@ export class WeaponSystem {
   private readonly scene: THREE.Scene;
   private readonly bolts: Bolt[] = [];
   private readonly rockets: Rocket[] = [];
+  private readonly torpedoes: Torpedo[] = [];
   private readonly blasts: BlastEffect[] = [];
 
   private boltGeo: THREE.BufferGeometry;
@@ -101,6 +123,15 @@ export class WeaponSystem {
   private rocketMat: THREE.MeshStandardMaterial;
   private rocketWarheadMat: THREE.MeshStandardMaterial;
   private rocketFlameMat: THREE.MeshBasicMaterial;
+
+  private torpBodyGeo: THREE.BufferGeometry;
+  private torpNoseGeo: THREE.BufferGeometry;
+  private torpFinGeo: THREE.BufferGeometry;
+  private torpFlameGeo: THREE.BufferGeometry;
+  private torpMat: THREE.MeshStandardMaterial;
+  private torpWarheadMat: THREE.MeshStandardMaterial;
+  private torpFlameMat: THREE.MeshBasicMaterial;
+
   private blastCoreGeo: THREE.BufferGeometry;
   private blastRingGeo: THREE.BufferGeometry;
 
@@ -110,6 +141,7 @@ export class WeaponSystem {
   private _muzzleTipLocal = new THREE.Vector3(0, 0.004, 1.67);
   private _rocketMuzzlePos = new THREE.Vector3();
   private _rocketTipLocal = new THREE.Vector3(0, 0.06, 1.38);
+  private _torpMuzzlePos = new THREE.Vector3();
   private _fwdTarget = new THREE.Vector3();
   private _dir = new THREE.Vector3();
   private _localAim = new THREE.Vector3();
@@ -229,6 +261,74 @@ export class WeaponSystem {
       });
     }
 
+    // Heavy Roof-Mounted Aerial Seeker Torpedoes (Exclusive to V8 Interceptor)
+    this.torpBodyGeo = new THREE.CylinderGeometry(0.088, 0.088, 1.18, 10);
+    this.torpBodyGeo.rotateX(Math.PI / 2);
+    this.torpNoseGeo = new THREE.SphereGeometry(0.088, 10, 8);
+    this.torpFinGeo = new THREE.BoxGeometry(0.38, 0.016, 0.22);
+    this.torpFlameGeo = new THREE.ConeGeometry(0.068, 0.36, 6);
+    this.torpFlameGeo.rotateX(-Math.PI / 2);
+
+    this.torpMat = new THREE.MeshStandardMaterial({
+      color: 0x16181f,
+      metalness: 0.88,
+      roughness: 0.25,
+    });
+    this.torpWarheadMat = new THREE.MeshStandardMaterial({
+      color: 0xff1414,
+      emissive: new THREE.Color(0xff0000),
+      emissiveIntensity: 0.65,
+      metalness: 0.3,
+      roughness: 0.2,
+    });
+    this.torpFlameMat = new THREE.MeshBasicMaterial({
+      color: 0x00e5ff,
+      transparent: true,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    });
+
+    for (let i = 0; i < TORPEDO_POOL_SIZE; i++) {
+      const group = new THREE.Group();
+      const body = new THREE.Mesh(this.torpBodyGeo, this.torpMat);
+      body.castShadow = true;
+      const nose = new THREE.Mesh(this.torpNoseGeo, this.torpWarheadMat);
+      nose.position.z = 0.59;
+      const finH = new THREE.Mesh(this.torpFinGeo, this.torpMat);
+      finH.position.z = -0.42;
+      const finV = new THREE.Mesh(this.torpFinGeo, this.torpMat);
+      finV.position.z = -0.42;
+      finV.rotation.z = Math.PI / 2;
+      const flame = new THREE.Mesh(this.torpFlameGeo, this.torpFlameMat);
+      flame.position.z = -0.72;
+
+      group.add(body, nose, finH, finV, flame);
+      group.visible = false;
+      group.frustumCulled = false;
+      scene.add(group);
+
+      this.torpedoes.push({
+        active: false,
+        x: 0,
+        y: 0,
+        z: 0,
+        vx: 0,
+        vy: 0,
+        vz: 0,
+        speed: 0,
+        life: 0,
+        ownerId: '',
+        isPlayer: false,
+        targetCar: null,
+        targetWorld: new THREE.Vector3(),
+        climbTimer: 0,
+        lateralOffset: 0,
+        mesh: group,
+      });
+    }
+
     this.blastCoreGeo = new THREE.SphereGeometry(1, 14, 12);
     this.blastRingGeo = new THREE.RingGeometry(0.7, 1.0, 24);
     this.blastRingGeo.rotateX(-Math.PI / 2);
@@ -269,6 +369,10 @@ export class WeaponSystem {
       r.active = false;
       r.mesh.visible = false;
     }
+    for (const t of this.torpedoes) {
+      t.active = false;
+      t.mesh.visible = false;
+    }
     for (const ex of this.blasts) {
       ex.active = false;
       ex.core.visible = false;
@@ -279,6 +383,7 @@ export class WeaponSystem {
   dispose(): void {
     for (const b of this.bolts) this.scene.remove(b.mesh);
     for (const r of this.rockets) this.scene.remove(r.mesh);
+    for (const t of this.torpedoes) this.scene.remove(t.mesh);
     for (const ex of this.blasts) {
       this.scene.remove(ex.core, ex.ring);
       (ex.core.material as THREE.Material).dispose();
@@ -294,6 +399,13 @@ export class WeaponSystem {
     this.rocketMat.dispose();
     this.rocketWarheadMat.dispose();
     this.rocketFlameMat.dispose();
+    this.torpBodyGeo.dispose();
+    this.torpNoseGeo.dispose();
+    this.torpFinGeo.dispose();
+    this.torpFlameGeo.dispose();
+    this.torpMat.dispose();
+    this.torpWarheadMat.dispose();
+    this.torpFlameMat.dispose();
     this.blastCoreGeo.dispose();
     this.blastRingGeo.dispose();
   }
@@ -545,6 +657,87 @@ export class WeaponSystem {
     ev.onFireRocket?.(car);
   }
 
+  fireTwinTorpedoesFromCar(
+    car: Car,
+    targetWorld: THREE.Vector3 | null,
+    lockedCar: Car | null,
+    ev: CombatEvents,
+    particles: Particles
+  ): void {
+    if (car.type !== 'interceptor' || car.torpedoCd > 0) return;
+
+    car.mesh.updateMatrixWorld(true);
+    const muzzles = car.rig.roofTorpedoMuzzles;
+    if (!muzzles || muzzles.length < 2) return;
+
+    car.torpedoCd = car.isPlayer ? 4.8 : 7.0;
+    car.roofTorpedoBackblastT = 0.22;
+
+    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(car.mesh.quaternion);
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(car.mesh.quaternion);
+    const up = new THREE.Vector3(0, 1, 0);
+
+    for (let i = 0; i < 2; i++) {
+      const slot = this.torpedoes.find(t => !t.active);
+      if (!slot) break;
+
+      const muzzle = muzzles[i];
+      muzzle.getWorldPosition(this._torpMuzzlePos);
+
+      const latSign = i === 0 ? -1 : 1;
+      // Launch arcs upward into the sky and fans slightly outward
+      const launchDir = new THREE.Vector3()
+        .copy(fwd)
+        .addScaledVector(right, latSign * 0.18)
+        .addScaledVector(up, 0.42)
+        .normalize();
+
+      const initSpd = Math.max(92, Math.abs(car.speed) + 74);
+      slot.active = true;
+      slot.x = this._torpMuzzlePos.x;
+      slot.y = this._torpMuzzlePos.y;
+      slot.z = this._torpMuzzlePos.z;
+      slot.vx = launchDir.x * initSpd;
+      slot.vy = launchDir.y * initSpd;
+      slot.vz = launchDir.z * initSpd;
+      slot.speed = initSpd;
+      slot.life = 4.2;
+      slot.ownerId = car.id;
+      slot.isPlayer = car.isPlayer;
+      slot.targetCar = lockedCar;
+      slot.climbTimer = 0.38;
+      slot.lateralOffset = latSign * 2.2;
+      if (targetWorld) slot.targetWorld.copy(targetWorld);
+      else slot.targetWorld.copy(this._torpMuzzlePos).addScaledVector(fwd, 150);
+
+      slot.mesh.position.set(slot.x, slot.y, slot.z);
+      this._quat.setFromUnitVectors(this._lookDir, launchDir);
+      slot.mesh.quaternion.copy(this._quat);
+      slot.mesh.visible = true;
+
+      // Heavy roof rail launch backblast
+      for (let k = 0; k < 8; k++) {
+        particles.spawn(
+          this._torpMuzzlePos.x - fwd.x * 1.1 + (Math.random() - 0.5) * 0.25,
+          this._torpMuzzlePos.y + (Math.random() - 0.5) * 0.2,
+          this._torpMuzzlePos.z - fwd.z * 1.1 + (Math.random() - 0.5) * 0.25,
+          -fwd.x * (8 + Math.random() * 9) + (Math.random() - 0.5) * 2.5,
+          1.8 + Math.random() * 3.2,
+          -fwd.z * (8 + Math.random() * 9) + (Math.random() - 0.5) * 2.5,
+          0.38 + Math.random() * 0.25,
+          1.4,
+          0.1,
+          0.85,
+          0.95,
+          3.2,
+          0.88
+        );
+      }
+    }
+
+    ev.onFireTorpedo?.(car);
+  }
+
   update(
     dt: number,
     cars: Car[],
@@ -568,6 +761,9 @@ export class WeaponSystem {
           }
           if (car.input.rocket && car.rocketCd <= 0) {
             this.fireRocketFromCar(car, playerTarget, lockedTarget, ev, particles);
+          }
+          if (car.input.torpedo && car.type === 'interceptor' && car.torpedoCd <= 0) {
+            this.fireTwinTorpedoesFromCar(car, playerTarget, lockedTarget, ev, particles);
           }
           continue;
         }
@@ -771,7 +967,110 @@ export class WeaponSystem {
       r.mesh.quaternion.copy(this._quat);
     }
 
-    // 4. Step explosion spheres/shockwaves
+    // 4. Step Heavy Roof-Mounted Torpedoes: Arc climb -> Seeker Dive -> Obliteration Blast
+    const torpHitRadiusSq = 2.65 * 2.65;
+    for (const t of this.torpedoes) {
+      if (!t.active) continue;
+      t.life -= dt;
+      if (t.life <= 0) {
+        t.active = false;
+        t.mesh.visible = false;
+        this.spawnExplosion(t.x, t.y, t.z, particles, 1.8);
+        continue;
+      }
+
+      // Acceleration during flight up to 260 m/s
+      t.speed = Math.min(260, t.speed + 175 * dt);
+      this._dir.set(t.vx, t.vy, t.vz).normalize();
+
+      if (t.climbTimer > 0) {
+        t.climbTimer -= dt;
+        // In climb phase: arcs upward and fans slightly outward
+        this._dir.y = Math.min(0.65, this._dir.y + 0.85 * dt);
+      } else {
+        // Seeker active! Aggressive homing dive on targetCar (or targetWorld)
+        if (t.targetCar && !t.targetCar.blasted && t.targetCar.respawnProtect <= 0) {
+          this._toCar.set(t.targetCar.x - t.x, t.targetCar.y + 0.65 - t.y, t.targetCar.z - t.z).normalize();
+          this._dir.lerp(this._toCar, clamp(8.5 * dt, 0, 0.62)).normalize();
+        } else if (t.targetWorld) {
+          this._toCar.set(t.targetWorld.x - t.x, t.targetWorld.y + 0.65 - t.y, t.targetWorld.z - t.z).normalize();
+          this._dir.lerp(this._toCar, clamp(6.2 * dt, 0, 0.45)).normalize();
+        }
+      }
+
+      t.vx = this._dir.x * t.speed;
+      t.vy = this._dir.y * t.speed;
+      t.vz = this._dir.z * t.speed;
+
+      const ax = t.x;
+      const ay = t.y;
+      const az = t.z;
+      const bx = ax + t.vx * dt;
+      const by = ay + t.vy * dt;
+      const bz = az + t.vz * dt;
+
+      // Cyan/plasma thruster trail & dense smoke behind torpedo
+      for (let k = 0; k < 2; k++) {
+        particles.spawn(
+          ax - this._dir.x * 0.65 + (Math.random() - 0.5) * 0.22,
+          ay - this._dir.y * 0.65 + (Math.random() - 0.5) * 0.22,
+          az - this._dir.z * 0.65 + (Math.random() - 0.5) * 0.22,
+          -this._dir.x * 7 + (Math.random() - 0.5) * 2.5,
+          0.6 + Math.random() * 2.5,
+          -this._dir.z * 7 + (Math.random() - 0.5) * 2.5,
+          0.45 + Math.random() * 0.35,
+          1.9,
+          0.0,
+          0.85,
+          0.95,
+          3.6,
+          0.92
+        );
+      }
+
+      let hitCar: Car | null = null;
+      for (const c of cars) {
+        if (c.blasted || c.id === t.ownerId) continue;
+        const dSq = distSqPointToSegment(c.x, c.y + 0.68, c.z, ax, ay, az, bx, by, bz);
+        if (dSq <= torpHitRadiusSq) {
+          hitCar = c;
+          break;
+        }
+      }
+
+      if (hitCar) {
+        t.active = false;
+        t.mesh.visible = false;
+        const shooter = carMap.get(t.ownerId) || null;
+        // Direct Torpedo Obliteration: Instant 1-hit kill & blast respawn
+        if (hitCar.respawnProtect <= 0 && !hitCar.remote) {
+          hitCar.hp = 0;
+          hitCar.sinceHit = 0;
+          hitCar.hit = 6.0;
+          ev.onHit(hitCar, shooter, 100);
+          this.blastCar(hitCar, shooter, particles, ev, 'torpedo');
+        } else if (hitCar.respawnProtect <= 0 && shooter?.isPlayer) {
+          ev.onHit(hitCar, shooter, 100);
+        }
+        continue;
+      }
+
+      if (by <= 0.05) {
+        t.active = false;
+        t.mesh.visible = false;
+        this.spawnExplosion(bx, 0.35, bz, particles, 1.75);
+        continue;
+      }
+
+      t.x = bx;
+      t.y = by;
+      t.z = bz;
+      t.mesh.position.set(bx, by, bz);
+      this._quat.setFromUnitVectors(this._lookDir, this._dir);
+      t.mesh.quaternion.copy(this._quat);
+    }
+
+    // 5. Step explosion spheres/shockwaves
     for (const ex of this.blasts) {
       if (!ex.active) continue;
       ex.age += dt;
@@ -789,7 +1088,7 @@ export class WeaponSystem {
       (ex.ring.material as THREE.MeshBasicMaterial).opacity = (1 - t) * 0.78;
     }
 
-    // 5. Low-HP smoke plume on heavily damaged cars
+    // 6. Low-HP smoke plume on heavily damaged cars
     for (const c of cars) {
       if (!c.blasted && c.hp < 45 && Math.random() < 0.45) {
         particles.spawn(
@@ -831,14 +1130,15 @@ export class WeaponSystem {
     }
   }
 
-  blastCar(victim: Car, shooter: Car | null, particles: Particles, ev: CombatEvents, isRocket = false): void {
+  blastCar(victim: Car, shooter: Car | null, particles: Particles, ev: CombatEvents, mode: boolean | string = false): void {
     if (victim.blasted) return;
     victim.blasted = true;
     victim.blastTimer = 1.25;
     victim.hp = 0;
     victim.lastAttackerId = shooter ? shooter.id : null;
     if (shooter) shooter.takedowns++;
-    this.spawnExplosion(victim.x, victim.y, victim.z, particles, isRocket ? 1.6 : 1.15);
-    ev.onBlast(victim, shooter, isRocket);
+    const scale = mode === 'torpedo' ? 2.2 : mode ? 1.6 : 1.15;
+    this.spawnExplosion(victim.x, victim.y, victim.z, particles, scale);
+    ev.onBlast(victim, shooter, mode);
   }
 }

@@ -13,6 +13,7 @@
   <!-- In-Race HUD -->
   <div id="hud" class="hidden">
     <div id="crosshair" aria-hidden="true">
+      <div id="lockBadge" class="reticle-lock-badge">TARGET LOCKED</div>
       <svg viewBox="0 0 64 64" width="54" height="54">
         <g class="reticle-ring">
           <path d="M20 8 H8 V20 M44 8 H56 V20 M20 56 H8 V44 M44 56 H56 V44" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"/>
@@ -48,6 +49,15 @@
     <canvas id="minimap" width="180" height="180" aria-label="Track minimap"></canvas>
 
     <div class="hud-bottom-right">
+      <div id="torpWrap" class="hidden">
+        <div class="torp-header">
+          <span id="torpTag">ROOF TORPEDOES [MMB / Q]</span>
+          <b id="torpPct">READY</b>
+        </div>
+        <div class="torp-track">
+          <div id="torpFill"></div>
+        </div>
+      </div>
       <div id="rocketWrap">
         <div class="rocket-header">
           <span id="rocketTag">ROCKETS [R-CLICK / E]</span>
@@ -82,7 +92,7 @@
     <div id="wrongway" class="hidden">WRONG WAY</div>
     <div id="toast" role="status" aria-live="polite"></div>
     <div id="help">
-      W / ↑ Gas · S Reverse · A / D Steer · <b>SPACE / ↓ Drift</b> · <b>SHIFT NOS</b> · <b>L-Click Gun</b> · <b>R-Click / E Rockets</b> · C Cam · R Reset · P Pause
+      W / ↑ Gas · S Reverse · A / D Steer · <b>SPACE / ↓ Drift</b> · <b>SHIFT NOS</b> · <b>L-Click Gun</b> · <b>R-Click Rockets</b> · <b>MMB / Q Torpedoes</b> · C Cam · R Reset · P Pause
     </div>
   </div>
 
@@ -96,6 +106,7 @@
     <button type="button" class="tbtn" id="tNos">NOS</button>
     <button type="button" class="tbtn" id="tFire">FIRE</button>
     <button type="button" class="tbtn" id="tRocket">ROCKET</button>
+    <button type="button" class="tbtn" id="tTorpedo">TORPEDO</button>
   </div>
 
   <div id="hudTopActions" class="hud-top-actions hidden">
@@ -300,6 +311,7 @@
       <dt>Aim Weapon Turret</dt><dd>Mouse Cursor</dd>
       <dt>Fire Bonnet Gun</dt><dd>Left Click or F (LB)</dd>
       <dt>Launch Dicky Rocket</dt><dd>Right Click or E / X (RB)</dd>
+      <dt>Twin Roof Torpedoes (Interceptor)</dt><dd>Middle Click or Q / T (R3 / L3)</dd>
       <dt>Camera View</dt><dd>C</dd>
       <dt>Reset to Track</dt><dd>R</dd>
       <dt>Mute / Pause</dt><dd>M / P or Esc</dd>

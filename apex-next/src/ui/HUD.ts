@@ -45,9 +45,14 @@ export class HUD {
       'help',
       'driftBadge',
       'driftPts',
+      'lockBadge',
       'hpFill',
       'hpPct',
       'hpWrap',
+      'torpFill',
+      'torpPct',
+      'torpTag',
+      'torpWrap',
       'rocketFill',
       'rocketPct',
       'rocketTag',
@@ -190,7 +195,7 @@ export class HUD {
     this.el.crosshair?.classList.add('hit');
   }
 
-  updateCrosshair(x: number, y: number, locked: boolean, firing: boolean, visible: boolean, dt: number): void {
+  updateCrosshair(x: number, y: number, locked: boolean, firing: boolean, visible: boolean, dt: number, isInterceptor = false): void {
     const ch = this.el.crosshair;
     if (!ch) return;
     ch.classList.toggle('hidden', !visible);
@@ -198,6 +203,9 @@ export class HUD {
     ch.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
     ch.classList.toggle('locked', locked);
     ch.classList.toggle('firing', firing);
+    if (this.el.lockBadge) {
+      this.el.lockBadge.textContent = isInterceptor ? 'TARGET LOCKED · MMB TORPEDO' : 'TARGET LOCKED';
+    }
     if (this.hitMarkerT > 0) {
       this.hitMarkerT -= dt;
       if (this.hitMarkerT <= 0) ch.classList.remove('hit');
@@ -253,6 +261,23 @@ export class HUD {
     this.el.driftBadge?.classList.toggle('active', showDrift);
     if (showDrift) {
       this.set('driftPts', `+${Math.round(player.driftScore).toLocaleString()}`);
+    }
+
+    // V8 Interceptor Roof Torpedoes Cooldown Bar (Exclusive)
+    const isInterceptor = player.type === 'interceptor';
+    this.el.torpWrap?.classList.toggle('hidden', !isInterceptor);
+    if (isInterceptor) {
+      const tCd = player.torpedoCd;
+      const tReady = tCd <= 0;
+      const tPct = tReady ? 100 : Math.round(clamp((1 - tCd / player.maxTorpedoCd) * 100, 0, 100));
+      this.set('torpPct', tReady ? 'READY' : `${tCd.toFixed(1)}s`);
+      if (this.el.torpFill) {
+        this.el.torpFill.style.setProperty('--torp-pct', `${tPct}%`);
+      }
+      this.el.torpWrap?.classList.toggle('ready', tReady);
+      if (this.el.torpTag) {
+        this.el.torpTag.textContent = tReady ? 'ROOF TORPEDOES [MMB / Q]' : 'RELOADING TORPEDOES';
+      }
     }
 
     // Rocket Launcher Cooldown Bar

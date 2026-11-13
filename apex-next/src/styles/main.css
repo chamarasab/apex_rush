@@ -782,6 +782,32 @@
     transform: scale(1.12);
   }
 
+  .reticle-lock-badge {
+    position: absolute;
+    inset-block-start: 100%;
+    inset-inline-start: 50%;
+    transform: translate(-50%, 6px);
+    white-space: nowrap;
+    font-size: 9.5px;
+    font-weight: 900;
+    letter-spacing: 1.2px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(255, 20, 20, 0.92);
+    color: #fff;
+    box-shadow: 0 0 10px rgba(255, 20, 20, 0.8);
+    opacity: 0;
+    pointer-events: none;
+    @media (prefers-reduced-motion: no-preference) {
+      transition: opacity 0.12s ease-out, transform 0.12s ease-out;
+    }
+  }
+
+  #crosshair.locked .reticle-lock-badge {
+    opacity: 1;
+    transform: translate(-50%, 4px);
+  }
+
   #crosshair .hit-x {
     opacity: 0;
     @media (prefers-reduced-motion: no-preference) {
@@ -791,6 +817,52 @@
 
   #crosshair.hit .hit-x {
     opacity: 1;
+  }
+
+  #torpWrap {
+    inline-size: 190px;
+    padding: 6px 10px;
+    border-radius: 10px;
+    background: rgba(8, 12, 22, 0.82);
+    border: 1px solid rgba(255, 30, 0, 0.45);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  #torpWrap.ready {
+    border-color: rgba(255, 40, 20, 0.95);
+    box-shadow: 0 0 16px rgba(255, 20, 0, 0.55);
+  }
+
+  .torp-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 1.2px;
+    color: #ff3b30;
+    margin-block-end: 4px;
+  }
+
+  #torpWrap.ready .torp-header {
+    color: #ff453a;
+  }
+
+  .torp-track {
+    block-size: 7px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.14);
+    overflow: hidden;
+  }
+
+  #torpFill {
+    block-size: 100%;
+    inline-size: var(--torp-pct, 100%);
+    background: linear-gradient(90deg, #d60000, #ff3b30);
+    transition: inline-size 0.08s linear;
+  }
+
+  #torpWrap.ready #torpFill {
+    background: linear-gradient(90deg, #ff1a1a, #ff6961);
   }
 
   #rocketWrap {
@@ -1143,12 +1215,22 @@
     border-color: #ff3d00;
     background: rgba(230, 45, 15, 0.55);
   }
+  #tTorpedo {
+    inset-inline-end: 174px;
+    inset-block-end: 192px;
+    inline-size: 66px;
+    block-size: 66px;
+    font-size: 10px;
+    border-color: #ff1a1a;
+    background: rgba(220, 20, 20, 0.6);
+  }
 
   body.touch #minimap { inset-block-end: auto; inset-block-start: 114px; inline-size: 116px; block-size: 116px; }
   body.touch .hud-bottom-right { inset-block-end: auto; inset-block-start: 126px; }
   body.touch #speedo { inline-size: 124px; block-size: 124px; }
   body.touch #nosWrap,
   body.touch #rocketWrap,
+  body.touch #torpWrap,
   body.touch #hpWrap { inline-size: 140px; }
   body.touch #crosshair,
   body.touch #help,

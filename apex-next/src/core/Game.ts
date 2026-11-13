@@ -80,6 +80,7 @@ export class Game {
   private weapons: WeaponSystem;
   private playerAimTarget = new THREE.Vector3();
   private lockedTarget: Car | null = null;
+  private prevLockedTarget: Car | null = null;
 
   private state: 'menu' | 'race' = 'menu';
   private screen: 'menu' | 'lobby' | 'finish' | null = 'menu';
@@ -1097,26 +1098,31 @@ export class Game {
     }
   }
 
-  private handleBlast(victim: Car, shooter: Car | null, mode: boolean | 'wrongway' | 'rocket' = false): void {
+  private handleBlast(victim: Car, shooter: Car | null, mode: boolean | string = false): void {
     const player = this.player!;
+    const isTorpedo = mode === 'torpedo';
     const isRocket = mode === true || mode === 'rocket';
     const isWrongWay = mode === 'wrongway';
     const dist = Math.hypot(victim.x - player.x, victim.z - player.z);
-    this.audio.playExplosion(clamp(1 - dist / (isRocket ? 180 : 140), 0.28, 1.0));
-    if (dist < (isRocket ? 90 : 65)) {
-      const mult = isRocket ? 1.0 : 0.72;
-      this.camCtl.shake = Math.min(1.0, Math.max(this.camCtl.shake, mult * (1 - dist / (isRocket ? 100 : 75))));
+    this.audio.playExplosion(clamp(1 - dist / (isTorpedo ? 220 : isRocket ? 180 : 140), 0.28, 1.0));
+    if (dist < (isTorpedo ? 120 : isRocket ? 90 : 65)) {
+      const mult = isTorpedo ? 1.25 : isRocket ? 1.0 : 0.72;
+      this.camCtl.shake = Math.min(1.0, Math.max(this.camCtl.shake, mult * (1 - dist / (isTorpedo ? 130 : isRocket ? 100 : 75))));
     }
     if (isWrongWay) {
       this.hud.toast('AUTO-EXPLODED — Wrong way for 5s!', 2.2);
     } else if (shooter === player) {
-      const nosBonus = isRocket ? 35 : 25;
+      const nosBonus = isTorpedo ? 50 : isRocket ? 35 : 25;
       player.nos = Math.min(100, player.nos + nosBonus);
-      const tag = isRocket ? '★ ROCKET OBLITERATED' : '★ BLASTED';
-      this.hud.toast(`${tag} ${victim.name}! +${nosBonus}% NOS`, 2.4);
+      const tag = isTorpedo ? '★ TWIN ROOF TORPEDOES OBLITERATED' : isRocket ? '★ ROCKET OBLITERATED' : '★ BLASTED';
+      this.hud.toast(`${tag} ${victim.name}! +${nosBonus}% NOS`, 2.6);
     } else if (victim === player) {
       const killer = shooter ? shooter.name : 'enemy fire';
-      const msg = isRocket ? `OBLITERATED by ${killer}'s rocket! Respawning...` : `BLASTED by ${killer}! Respawning...`;
+      const msg = isTorpedo
+        ? `OBLITERATED by ${killer}'s twin torpedoes! Respawning...`
+        : isRocket
+        ? `OBLITERATED by ${killer}'s rocket! Respawning...`
+        : `BLASTED by ${killer}! Respawning...`;
       this.hud.toast(msg, 2.2);
     }
   }
@@ -1153,9 +1159,13 @@ export class Game {
       const ndcY = this.isTouch ? 0.14 : this.input.mouse.ndcY;
       this.lockedTarget = this.weapons.resolvePlayerAim(player, this.camera, ndcX, ndcY, this.cars, this.playerAimTarget);
       aimTarget = this.playerAimTarget;
+      if (this.lockedTarget && !this.prevLockedTarget && player.type === 'interceptor') {
+        this.audio.playLockTone();
+      }
     } else {
       this.lockedTarget = null;
     }
+    this.prevLockedTarget = this.lockedTarget;
 
     const combatEv = {
       onFire: (car: Car) => {
@@ -1176,14 +1186,23 @@ export class Game {
           this.camCtl.shake = Math.max(this.camCtl.shake, 0.22);
         }
       },
+      onFireTorpedo: (car: Car) => {
+        const d = Math.hypot(car.x - player.x, car.z - player.z);
+        if (car === player || d < 120) {
+          this.audio.playTorpedoLaunch(car === player);
+        }
+        if (car === player) {
+          this.camCtl.shake = Math.max(this.camCtl.shake, 0.36);
+        }
+      },
       onHit: (_victim: Car, shooter: Car | null) => {
         if (shooter === player) {
           this.hud.flashHit();
           this.audio.playHitMarker();
         }
       },
-      onBlast: (victim: Car, shooter: Car | null, isRocket?: boolean) =>
-        this.handleBlast(victim, shooter, isRocket ? 'rocket' : false),
+      onBlast: (victim: Car, shooter: Car | null, mode?: boolean | string) =>
+        this.handleBlast(victim, shooter, mode || false),
     };
 
     this.weapons.update(dt, this.cars, race.phase === 'racing', aimTarget, this.lockedTarget, this.particles, combatEv);
@@ -1496,7 +1515,8 @@ export class Game {
           !!this.lockedTarget,
           !!(p.input.fire && !p.blasted && this.race.phase === 'racing'),
           !this.isTouch && !this.finishShown && !p.blasted,
-          dtReal
+          dtReal,
+          p.type === 'interceptor'
         );
         if (this.finishShown && (this.resultsT -= dtReal) <= 0) {
           this.resultsT = 0.5;

@@ -6,8 +6,8 @@ export type PlayerAction = 'camera' | 'reset' | 'mute' | 'pause' | 'confirm';
 export class PlayerController {
   private keys: Record<string, boolean> = {};
   private onAction: (action: PlayerAction) => void;
-  private touch = { left: 0, right: 0, gas: 0, brake: 0, drift: 0, nos: 0, fire: 0, rocket: 0 };
-  private pad = { steer: 0, gas: 0, brake: 0, drift: false, nos: false, fire: false, rocket: false, prev: {} as Record<number, boolean> };
+  private touch = { left: 0, right: 0, gas: 0, brake: 0, drift: 0, nos: 0, fire: 0, rocket: 0, torpedo: 0 };
+  private pad = { steer: 0, gas: 0, brake: 0, drift: false, nos: false, fire: false, rocket: false, torpedo: false, prev: {} as Record<number, boolean> };
 
   readonly mouse = {
     x: window.innerWidth * 0.5,
@@ -16,6 +16,7 @@ export class PlayerController {
     ndcY: 0.16,
     down: false,
     rightDown: false,
+    middleDown: false,
     moved: false,
   };
 
@@ -35,6 +36,11 @@ export class PlayerController {
       const tag = target?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       e.preventDefault();
+    });
+
+    window.addEventListener('auxclick', e => {
+      // Prevent browser autoscroll when middle-clicking in game area
+      if (e.button === 1) e.preventDefault();
     });
 
     window.addEventListener('keydown', e => {
@@ -59,6 +65,7 @@ export class PlayerController {
       this.keys = {};
       this.mouse.down = false;
       this.mouse.rightDown = false;
+      this.mouse.middleDown = false;
     });
 
     window.addEventListener('pointermove', e => {
@@ -74,7 +81,7 @@ export class PlayerController {
 
     window.addEventListener('pointerdown', e => {
       if (e.pointerType === 'touch') return;
-      if (e.button !== 0 && e.button !== 2) return;
+      if (e.button !== 0 && e.button !== 1 && e.button !== 2) return;
       const target = e.target as HTMLElement | null;
       if (target?.closest('button, a, input, select, dialog, .garage-panel, .card, .hud-top-actions, #touch')) {
         return;
@@ -85,6 +92,10 @@ export class PlayerController {
       this.mouse.ndcY = -(e.clientY / Math.max(1, window.innerHeight)) * 2 + 1;
       this.mouse.moved = true;
       if (e.button === 0) this.mouse.down = true;
+      if (e.button === 1) {
+        e.preventDefault();
+        this.mouse.middleDown = true;
+      }
       if (e.button === 2) {
         e.preventDefault();
         this.mouse.rightDown = true;
@@ -93,12 +104,14 @@ export class PlayerController {
 
     window.addEventListener('pointerup', e => {
       if (e.button === 0) this.mouse.down = false;
+      if (e.button === 1) this.mouse.middleDown = false;
       if (e.button === 2) this.mouse.rightDown = false;
     });
 
     window.addEventListener('pointercancel', () => {
       this.mouse.down = false;
       this.mouse.rightDown = false;
+      this.mouse.middleDown = false;
     });
 
     const bind = (id: string, key: keyof typeof this.touch) => {
@@ -123,6 +136,7 @@ export class PlayerController {
     bind('tNos', 'nos');
     bind('tFire', 'fire');
     bind('tRocket', 'rocket');
+    bind('tTorpedo', 'torpedo');
   }
 
   pollPad(): void {
@@ -139,7 +153,9 @@ export class PlayerController {
       s.steer = s.gas = s.brake = 0;
       s.drift = false;
       s.nos = false;
+      s.fire = false;
       s.rocket = false;
+      s.torpedo = false;
       return;
     }
     const b = (i: number) => (gp!.buttons[i] ? gp!.buttons[i].value : 0);
@@ -150,8 +166,9 @@ export class PlayerController {
     s.brake = b(6);
     s.drift = pr(0) || pr(2); // A / X
     s.nos = pr(1) || pr(3); // B / Y
-    s.fire = pr(4) || pr(11); // LB / R3
-    s.rocket = pr(5) || pr(10); // RB / L3
+    s.fire = pr(4); // LB
+    s.rocket = pr(5); // RB
+    s.torpedo = pr(11) || pr(10); // R3 / L3 stick click
 
     const padMap: [number, PlayerAction][] = [
       [9, 'pause'],
@@ -194,6 +211,7 @@ export class PlayerController {
     inp.nos = !!(k.ShiftLeft || k.ShiftRight || t.nos > 0 || p.nos);
     inp.fire = !!(this.mouse.down || k.KeyF || k.KeyJ || t.fire > 0 || p.fire);
     inp.rocket = !!(this.mouse.rightDown || k.KeyE || k.KeyX || t.rocket > 0 || p.rocket);
+    inp.torpedo = !!(this.mouse.middleDown || k.KeyQ || k.KeyT || t.torpedo > 0 || p.torpedo);
   }
 }
 

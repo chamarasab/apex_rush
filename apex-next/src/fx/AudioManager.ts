@@ -367,6 +367,73 @@ export class AudioManager {
     n.stop(t + 0.48);
   }
 
+  playTorpedoLaunch(isPlayer = false): void {
+    if (!this.ctx || this.muted) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const gainScale = isPlayer ? 1.0 : 0.7;
+
+    // Pneumatic ejection pop & heavy sub-bass kick: 240Hz -> 36Hz
+    const o = ctx.createOscillator();
+    const og = ctx.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(240, t);
+    o.frequency.exponentialRampToValueAtTime(36, t + 0.28);
+    og.gain.setValueAtTime(0.55 * gainScale, t);
+    og.gain.exponentialRampToValueAtTime(0.001, t + 0.32);
+    o.connect(og);
+    og.connect(this.master);
+    o.start(t);
+    o.stop(t + 0.34);
+
+    // Twin rocket booster ignition roar: intense swept bandpass noise
+    const n = ctx.createBufferSource();
+    n.buffer = this.noise;
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.setValueAtTime(920, t);
+    f.frequency.exponentialRampToValueAtTime(3200, t + 0.18);
+    f.frequency.exponentialRampToValueAtTime(520, t + 0.52);
+    f.Q.value = 1.8;
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.48 * gainScale, t);
+    ng.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+    n.connect(f);
+    f.connect(ng);
+    ng.connect(this.master);
+    n.start(t, Math.random());
+    n.stop(t + 0.58);
+  }
+
+  playLockTone(): void {
+    if (!this.ctx || this.muted) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+
+    // High-tech dual-pulse missile target lock tone
+    const o1 = ctx.createOscillator();
+    const g1 = ctx.createGain();
+    o1.type = 'sine';
+    o1.frequency.setValueAtTime(1850, t);
+    g1.gain.setValueAtTime(0.18, t);
+    g1.gain.exponentialRampToValueAtTime(0.001, t + 0.045);
+    o1.connect(g1);
+    g1.connect(this.master);
+    o1.start(t);
+    o1.stop(t + 0.05);
+
+    const o2 = ctx.createOscillator();
+    const g2 = ctx.createGain();
+    o2.type = 'sine';
+    o2.frequency.setValueAtTime(2400, t + 0.05);
+    g2.gain.setValueAtTime(0.22, t + 0.05);
+    g2.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
+    o2.connect(g2);
+    g2.connect(this.master);
+    o2.start(t + 0.05);
+    o2.stop(t + 0.12);
+  }
+
   playHitMarker(): void {
     if (!this.ctx || this.muted) return;
     const ctx = this.ctx;

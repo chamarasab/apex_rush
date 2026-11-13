@@ -37,6 +37,11 @@ export interface CarVisualRig {
   rocketLauncherPitch: THREE.Group;
   rocketMuzzlePoint: THREE.Object3D;
   rocketBackblastFlash: THREE.Group;
+  roofTorpedoRoot?: THREE.Group;
+  roofTorpedoMuzzles?: [THREE.Object3D, THREE.Object3D];
+  roofTorpedoMeshLeft?: THREE.Group;
+  roofTorpedoMeshRight?: THREE.Group;
+  roofTorpedoBackblast?: THREE.Group;
   dispose: () => void;
 }
 
@@ -1046,6 +1051,12 @@ export function buildCarVisual(
     envMapIntensity: id === 'r34' ? 1.35 : 1.0,
   });
 
+  let roofTorpedoRoot: THREE.Group | undefined;
+  let roofTorpedoMuzzles: [THREE.Object3D, THREE.Object3D] | undefined;
+  let roofTorpedoMeshLeft: THREE.Group | undefined;
+  let roofTorpedoMeshRight: THREE.Group | undefined;
+  let roofTorpedoBackblast: THREE.Group | undefined;
+
   const rimMat = new THREE.MeshStandardMaterial({
     color: S.rimColor,
     metalness: 0.85,
@@ -1886,6 +1897,102 @@ export function buildCarVisual(
       }
     }
 
+    // 6. Rooftop Twin Torpedo Launch Rails & Aerial Seeker Torpedoes (Exclusive to Interceptor)
+    roofTorpedoRoot = new THREE.Group();
+    roofTorpedoRoot.position.set(0, 1.38, -0.15);
+
+    const torpRailGeo = new THREE.BoxGeometry(0.09, 0.06, 1.32);
+    const torpClampGeo = new THREE.BoxGeometry(0.12, 0.08, 0.10);
+    const torpBodyGeo = new THREE.CylinderGeometry(0.075, 0.075, 1.15, 10);
+    torpBodyGeo.rotateX(Math.PI / 2);
+    const torpNoseGeo = new THREE.ConeGeometry(0.075, 0.24, 10);
+    torpNoseGeo.rotateX(Math.PI / 2);
+    const torpFinHGeo = new THREE.BoxGeometry(0.36, 0.016, 0.20);
+    const torpFinVGeo = new THREE.BoxGeometry(0.016, 0.36, 0.20);
+    const torpNozzleGeo = new THREE.CylinderGeometry(0.038, 0.048, 0.12, 8);
+    torpNozzleGeo.rotateX(Math.PI / 2);
+    const torpSeekerGeo = new THREE.SphereGeometry(0.032, 8, 8);
+    const torpFlashConeGeo = new THREE.ConeGeometry(0.16, 0.52, 8);
+    torpFlashConeGeo.rotateX(-Math.PI / 2); // points backward
+
+    disposables.push(
+      torpRailGeo,
+      torpClampGeo,
+      torpBodyGeo,
+      torpNoseGeo,
+      torpFinHGeo,
+      torpFinVGeo,
+      torpNozzleGeo,
+      torpSeekerGeo,
+      torpFlashConeGeo
+    );
+
+    const buildRoofTorpedoMesh = (sx: number): { torpGroup: THREE.Group; muzzle: THREE.Object3D } => {
+      // Launch Rail
+      const rail = new THREE.Mesh(torpRailGeo, A.mGunMetal);
+      rail.position.set(sx * 0.34, 0, 0);
+      rail.rotation.x = -0.04; // slight upward ballistic rake
+      rail.castShadow = true;
+
+      // Mounting Clamps to roof cage
+      for (const cz of [-0.45, 0.35]) {
+        const clampMesh = new THREE.Mesh(torpClampGeo, A.mDarkTrim);
+        clampMesh.position.set(sx * 0.34, -0.04, cz);
+        roofTorpedoRoot!.add(clampMesh);
+      }
+      roofTorpedoRoot!.add(rail);
+
+      // Torpedo missile assembly
+      const torpGroup = new THREE.Group();
+      torpGroup.position.set(sx * 0.34, 0.07, 0);
+      torpGroup.rotation.x = -0.04;
+
+      const body = new THREE.Mesh(torpBodyGeo, A.mGunMetal);
+      body.castShadow = true;
+      const nose = new THREE.Mesh(torpNoseGeo, A.mDarkTrim);
+      nose.position.z = 0.69;
+      nose.castShadow = true;
+      const seeker = new THREE.Mesh(torpSeekerGeo, A.mRocketWarhead);
+      seeker.position.z = 0.81;
+
+      const finH = new THREE.Mesh(torpFinHGeo, A.mGunAccent);
+      finH.position.z = -0.45;
+      const finV = new THREE.Mesh(torpFinVGeo, A.mGunAccent);
+      finV.position.z = -0.45;
+
+      const nozzle1 = new THREE.Mesh(torpNozzleGeo, A.mChrome);
+      nozzle1.position.set(-0.024, 0, -0.63);
+      const nozzle2 = new THREE.Mesh(torpNozzleGeo, A.mChrome);
+      nozzle2.position.set(0.024, 0, -0.63);
+
+      torpGroup.add(body, nose, seeker, finH, finV, nozzle1, nozzle2);
+      roofTorpedoRoot!.add(torpGroup);
+
+      const muzzle = new THREE.Object3D();
+      muzzle.position.set(sx * 0.34, 0.07, 0.75);
+      roofTorpedoRoot!.add(muzzle);
+
+      return { torpGroup, muzzle };
+    };
+
+    const leftTorp = buildRoofTorpedoMesh(-1);
+    const rightTorp = buildRoofTorpedoMesh(1);
+    roofTorpedoMeshLeft = leftTorp.torpGroup;
+    roofTorpedoMeshRight = rightTorp.torpGroup;
+    roofTorpedoMuzzles = [leftTorp.muzzle, rightTorp.muzzle];
+
+    // Rear roof backblast flame
+    roofTorpedoBackblast = new THREE.Group();
+    roofTorpedoBackblast.position.set(0, 0.05, -0.72);
+    roofTorpedoBackblast.visible = false;
+    for (const sx of [-0.34, 0.34]) {
+      const bbCone = new THREE.Mesh(torpFlashConeGeo, A.mMuzzleFlash);
+      bbCone.position.set(sx, 0, -0.28);
+      roofTorpedoBackblast.add(bbCone);
+    }
+    roofTorpedoRoot.add(roofTorpedoBackblast);
+    bodyGroup.add(roofTorpedoRoot);
+
     // NOS flames shoot from the side zoomie tips
     exhaustOffsets = [
       [-halfW - 0.10, 0.30, -0.68],
@@ -2045,6 +2152,11 @@ export function buildCarVisual(
     rocketLauncherPitch: launcher.rocketLauncherPitch,
     rocketMuzzlePoint: launcher.rocketMuzzlePoint,
     rocketBackblastFlash: launcher.rocketBackblastFlash,
+    roofTorpedoRoot,
+    roofTorpedoMuzzles,
+    roofTorpedoMeshLeft,
+    roofTorpedoMeshRight,
+    roofTorpedoBackblast,
     dispose: () => {
       for (const d of disposables) d.dispose();
     },
